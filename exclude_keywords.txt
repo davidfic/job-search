@@ -1,0 +1,51 @@
+# Hard-exclude keywords for jobhunt.
+# One term per line. Anything after '#' is a comment. Blank lines ignored.
+# A listing containing ANY of these terms is dropped entirely.
+# Edit freely -- this file is imported every time you run 'fetch'.
+
+# --- Age requirements a 19-year-old can't meet ---
+# NOTE: avoid a bare "21+" here -- it collides with wages like "$21+/hour".
+# Spell out the age intent instead.
+must be 21
+21 and over
+21 and older
+21 years or older
+ages 21
+must be 25
+
+# --- Needs a car / driving (you're on transit) ---
+cdl
+delivery driver
+must have a car
+must have a vehicle
+own vehicle
+reliable vehicle
+own transportation
+valid driver's license
+
+# --- Too senior / too much required experience ---
+director
+5+ years
+6+ years
+7+ years
+10+ years
+years of experience required
+bachelor's degree required
+master's degree
+
+# --- Licensed/credentialed roles ---
+registered nurse
+licensed
+cpa
+real estate license
+
+# --- Scams / unpaid / sketchy ---
+unpaid
+commission only
+100% commission
+straight commission
+pay to start
+startup fee
+work from home opportunity
+be your own boss
+drivers

@@ -1,0 +1,114 @@
+============================================================
+  jobhunt  —  a local job-search helper
+  (set up for finding a summer job around Davis Square)
+============================================================
+
+Everything runs on YOUR computer. Nothing is uploaded anywhere,
+there are no accounts, and it's free.
+
+You only need to do TWO things: install Python once, then
+double-click the start file. That's it.
+
+
+------------------------------------------------------------
+  STEP 1  —  Install Python  (one time only)
+------------------------------------------------------------
+
+Python is the free engine this app runs on.
+
+  1. Go to:   https://www.python.org/downloads/
+  2. Click the big yellow "Download Python" button.
+  3. Open the file you downloaded and install it.
+
+  *** WINDOWS USERS — IMPORTANT ***
+  On the very first screen of the installer, CHECK the box at
+  the bottom that says "Add Python to PATH" BEFORE clicking
+  "Install Now". This one checkbox is the most common thing
+  people miss.
+
+If you're not sure whether you already have Python, that's
+fine — just try Step 2 first. The app will tell you if it's
+missing.
+
+
+------------------------------------------------------------
+  STEP 2  —  Start the app
+------------------------------------------------------------
+
+Double-click the start file for your computer:
+
+   Windows .........  "Start jobhunt (Windows).bat"
+   Mac .............  "Start jobhunt (Mac).command"
+   Linux ...........  "start-jobhunt (Linux).sh"
+
+A small black window will open and say it's setting things up.
+The FIRST time, this takes about a minute (it downloads two
+small components). After that it starts in a couple seconds.
+
+When it's ready, your web browser opens automatically to the
+app. If it doesn't, open your browser and go to:
+
+   http://127.0.0.1:8765
+
+
+------------------------------------------------------------
+  USING IT
+------------------------------------------------------------
+
+  - Click "Fetch new jobs" (top right) to pull listings.
+  - Browse the cards, ranked by fit, on the map of the area.
+  - Use the tabs to triage: mark jobs "Interested" or
+    "Not interested".
+  - Add words to the Keywords boxes to tune results, or to the
+    Exclude box to instantly hide listings you don't want.
+  - Upload your resume in the sidebar to get keyword ideas.
+  - Click "Apply" on a job to draft an application.
+
+
+------------------------------------------------------------
+  TO STOP IT
+------------------------------------------------------------
+
+Just close the small black window. To use it again later,
+double-click the same start file.
+
+
+------------------------------------------------------------
+  IF SOMETHING DOESN'T WORK
+------------------------------------------------------------
+
+"It says Python is not installed."
+   Do Step 1 above, then double-click the start file again.
+   (Windows: make sure you checked "Add Python to PATH".)
+
+Mac: "cannot be opened because it is from an unidentified
+developer."
+   Right-click (or Control-click) the "Start jobhunt (Mac)"
+   file, choose "Open", then click "Open" again. You only
+   need to do this the first time.
+
+"No jobs appear when I click Fetch."
+   - Make sure you have internet.
+   - TURN OFF any VPN. The job site (Craigslist) blocks VPN
+     and company networks. A normal home connection works.
+   - A few fetches a day is plenty; don't spam the button.
+
+"The black window closed by itself."
+   Re-open the start file. If it keeps happening, take a photo
+   of any red text in the window and send it over.
+
+
+------------------------------------------------------------
+  OPTIONAL — more local listings
+------------------------------------------------------------
+
+Out of the box it uses Craigslist. You can add a second free
+source (Adzuna) for more retail/food/seasonal listings:
+
+  1. Sign up (free, no card) at:  https://developer.adzuna.com/
+  2. Open "jobhunt_config.json" in any text editor.
+  3. Find "adzuna" and paste your Application ID and Key into
+     the "app_id" and "app_key" quotes. Save the file.
+  4. Click "Fetch new jobs" again.
+
+Enjoy the job hunt!

@@ -1,0 +1,197 @@
+{
+  "profile": {
+    "keywords_positive": {
+      "summer": 6,
+      "seasonal": 5,
+      "part-time": 5,
+      "part time": 5,
+      "no experience": 6,
+      "entry level": 5,
+      "entry-level": 5,
+      "cashier": 4,
+      "retail": 3,
+      "host": 3,
+      "crew": 3,
+      "ice cream": 3,
+      "tutor": 4,
+      "intern": 4,
+      "internship": 4,
+      "student": 3,
+      "weekend": 2,
+      "flexible": 2,
+      "training provided": 4
+    },
+    "keywords_negative": {
+      "manager": -6,
+      "supervisor": -4,
+      "experience required": -6,
+      "years experience": -6,
+      "full-time only": -4,
+      "overnight": -3
+    },
+    "exclude": [],
+    "exclude_file": "exclude_keywords.txt",
+    "must_have": [],
+    "title_boost": 3,
+    "min_display_score": 1
+  },
+  "location_filter": {
+    "enabled": true,
+    "home": "Davis Square, Somerville, MA",
+    "remote_ok": true,
+    "drop_unmatched": false,
+    "walkable_bonus": 8,
+    "transit_bonus": 3,
+    "walkable": [
+      "davis",
+      "teele",
+      "ball square",
+      "magoun",
+      "west somerville",
+      "tufts",
+      "powderhouse",
+      "college ave",
+      "porter"
+    ],
+    "allow": [
+      "somerville",
+      "porter",
+      "north cambridge",
+      "cambridge",
+      "harvard",
+      "central square",
+      "kendall",
+      "mit",
+      "alewife",
+      "medford",
+      "arlington",
+      "union square",
+      "inman",
+      "east cambridge",
+      "lechmere",
+      "charlestown",
+      "boston",
+      "downtown",
+      "downtown crossing",
+      "south station",
+      "back bay",
+      "beacon hill",
+      "financial district",
+      "fenway",
+      "allston",
+      "brighton",
+      "malden",
+      "everett",
+      "chelsea",
+      "remote"
+    ],
+    "block": [
+      "burlington",
+      "woburn",
+      "wilmington",
+      "billerica",
+      "lexington",
+      "bedford",
+      "waltham",
+      "framingham",
+      "natick",
+      "needham",
+      "dedham",
+      "marlborough",
+      "peabody",
+      "danvers",
+      "saugus",
+      "andover",
+      "lowell",
+      "nashua",
+      "new hampshire",
+      "worcester",
+      "brockton",
+      "plymouth",
+      "cape cod",
+      "providence",
+      "rhode island",
+      "south shore",
+      "north shore",
+      "metrowest",
+      "braintree",
+      "weymouth",
+      "quincy",
+      "salem",
+      "gloucester"
+    ]
+  },
+  "sources": {
+    "craigslist": {
+      "enabled": true,
+      "request_delay_seconds": 3,
+      "searches": [
+        {
+          "city": "boston",
+          "category": "jjj",
+          "query": "summer"
+        },
+        {
+          "city": "boston",
+          "category": "jjj",
+          "query": "part time"
+        },
+        {
+          "city": "boston",
+          "category": "jjj",
+          "query": "no experience"
+        },
+        {
+          "city": "boston",
+          "category": "jjj",
+          "query": "barista"
+        },
+        {
+          "city": "boston",
+          "category": "jjj",
+          "query": "camp counselor"
+        },
+        {
+          "city": "boston",
+          "category": "ggg",
+          "query": "summer"
+        }
+      ]
+    },
+    "remoteok": {
+      "enabled": false,
+      "tags": []
+    },
+    "remotive": {
+      "enabled": false,
+      "search": "",
+      "category": ""
+    },
+    "weworkremotely": {
+      "enabled": false,
+      "feeds": []
+    },
+    "adzuna": {
+      "enabled": true,
+      "app_id": "",
+      "app_key": "",
+      "country": "us",
+      "what": "part time summer",
+      "where": "Somerville, Massachusetts",
+      "distance": 13,
+      "max_days_old": 30,
+      "sort_by": "date",
+      "results_per_page": 50,
+      "pages": 3,
+      "request_delay_seconds": 1
+    }
+  },
+  "applicant": {
+    "name": "",
+    "email": "",
+    "phone": ""
+  },
+  "outreach": {
+    "cover_template": "Hi,\n\nI'm writing to apply for the {job_title} position at {company}. I'm a local, reliable, and eager to learn, and I think I'd be a great fit. My resume is attached -- I'd love to talk about the role whenever works for you.\n\nThanks for your time,\n{name}\n{my_email} | {my_phone}\n"
+  }
+}

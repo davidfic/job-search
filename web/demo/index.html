@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>jobhunt</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◎</span>
+      <div>
+        <h1>jobhunt</h1>
+        <p class="home" id="homeLabel">summer jobs near Davis Square</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="counts" id="counts"></div>
+      <button id="outboxBtn" class="btn" title="Sent applications">📤 Sent</button>
+      <button id="settingsBtn" class="btn" title="Your info & email setup">⚙ Settings</button>
+      <button id="fetchBtn" class="btn primary">
+        <span class="btn-label">Fetch new jobs</span>
+        <span class="spinner" hidden></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Sidebar: filters + keyword manager -->
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>Resume</h2>
+        <div id="resume"></div>
+        <input type="file" id="resumeInput" accept=".pdf,.docx,.txt,.md,.rtf,.text" hidden>
+      </section>
+
+      <section class="panel">
+        <h2>Filters</h2>
+        <label class="field">
+          <span>Min fit score: <b id="minScoreVal">1</b></span>
+          <input type="range" id="minScore" min="0" max="30" value="1">
+        </label>
+        <p class="hint" id="resultCount"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Keywords</h2>
+        <p class="hint">Tune what counts as a good fit. Changes apply to the next fetch.</p>
+
+        <div class="kw-group" data-list="positive">
+          <h3><span class="dot good"></span> Good fit <small>(boost)</small></h3>
+          <div class="chips" id="kwPositive"></div>
+          <form class="kw-add" data-list="positive">
+            <input type="text" placeholder="e.g. dishwasher" required>
+            <input type="number" class="weight" value="4" title="points" aria-label="points">
+            <button class="btn tiny" type="submit">Add</button>
+          </form>
+        </div>
+
+        <div class="kw-group" data-list="negative">
+          <h3><span class="dot warn"></span> Demote <small>(soft penalty)</small></h3>
+          <div class="chips" id="kwNegative"></div>
+          <form class="kw-add" data-list="negative">
+            <input type="text" placeholder="e.g. overnight" required>
+            <input type="number" class="weight" value="-4" title="points" aria-label="points">
+            <button class="btn tiny" type="submit">Add</button>
+          </form>
+        </div>
+
+        <div class="kw-group" data-list="exclude">
+          <h3><span class="dot bad"></span> Exclude <small>(drop entirely)</small></h3>
+          <div class="chips" id="kwExclude"></div>
+          <form class="kw-add" data-list="exclude">
+            <input type="text" placeholder="e.g. commission only" required>
+            <button class="btn tiny" type="submit">Add</button>
+          </form>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Job list -->
+    <section class="joblist" aria-label="Job listings">
+      <div class="tabs" id="tabs"></div>
+      <div class="jobcards" id="joblist"></div>
+    </section>
+
+    <!-- Drag to resize list vs map (double-click to reset) -->
+    <div class="gutter" id="gutter" role="separator" aria-orientation="vertical"
+         title="Drag to resize · double-click to reset"></div>
+
+    <!-- Map -->
+    <section class="mapwrap">
+      <div id="map"></div>
+      <div class="legend" id="legend"></div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

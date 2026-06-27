@@ -1,0 +1,28 @@
+# ---- personal data — never commit these ----
+# SMTP password / email login:
+jobhunt_secrets.json
+# your saved jobs, statuses, notes, application log:
+jobhunt.db
+# your live config (may hold your name + API keys):
+jobhunt_config.json
+# your uploaded resume(s):
+resumes/
+# generated report:
+jobhunt_report.html
+
+# ---- build / run artifacts ----
+.venv/
+__pycache__/
+*.pyc
+# packaged build (attach to a GitHub Release instead):
+jobhunt.zip
+# screenshots / scratch images:
+jobhunt-ui.png
+
+# ---- local tooling / editor / OS ----
+.claude/
+.playwright-mcp/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
