@@ -26,3 +26,7 @@ jobhunt-ui.png
 Thumbs.db
 .idea/
 .vscode/
+
+# standalone demo deploy build (artifact)
+jobhunt-demo/
+jobhunt-demo.zip

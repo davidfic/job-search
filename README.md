@@ -9,6 +9,8 @@ It ships configured for a real example: **finding a summer job around Davis Squa
 Somerville MA**, reachable by the Red Line and the Green Line E branch. You can point
 it at any area by editing the config (see [Change the area](#change-the-area)).
 
+**▶ Live demo (click around, no install): <https://davidfic.github.io/job-search/>**
+
 - 🔎 Pulls listings from **Craigslist** (and optionally Adzuna) and scores them by fit
 - 🗺️ **Map** of every job with the **Red Line**, **Green Line E** (out of Ball Square),
   and key Davis-area **bus routes**
@@ -160,5 +162,5 @@ python jobhunt.py mark <id> interested
 python jobhunt.py report            # static HTML report
 ```
 
-`web/demo/` is a self-contained, no-backend build (baked sample data) you can host on
-any static site to show the app off.
+`docs/` is a self-contained, no-backend build (baked sample data) that powers the live
+demo via GitHub Pages, and can be hosted on any static site to show the app off.
