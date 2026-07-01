@@ -153,8 +153,17 @@ def build_jobs(view=None, min_score=None):
     for r in kept:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
 
-    status = _VIEW_STATUS.get(view)
-    shown = [r for r in kept if not status or r["status"] == status]
+    # The most recent fetch stamps every new row with the same first_seen, so the
+    # newest stamp identifies the batch pulled by the last "Fetch new jobs" run.
+    latest = max((r["first_seen"] for r in kept if r["first_seen"]), default=None)
+    latest_rows = [r for r in kept if latest and r["first_seen"] == latest]
+    counts["latest"] = len(latest_rows)
+
+    if view == "latest":
+        shown = latest_rows
+    else:
+        status = _VIEW_STATUS.get(view)
+        shown = [r for r in kept if not status or r["status"] == status]
 
     jobs = []
     for r in shown:

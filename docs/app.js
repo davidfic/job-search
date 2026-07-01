@@ -35,6 +35,7 @@ const state = { transit: {}, home: null, statuses: [], markers: new Map(), activ
 
 // Triage tabs: which status each view shows.
 const VIEWS = [
+  { key: "latest", label: "🆕 Just fetched" },
   { key: "new", label: "To review" },
   { key: "interested", label: "★ Interested" },
   { key: "applied", label: "Applied" },
@@ -233,7 +234,7 @@ function renderJobs(data) {
   if (!jobs.length) {
     const v = VIEWS.find((x) => x.key === state.view);
     list.innerHTML = `<div class="empty">Nothing in <b>${escapeHtml(v ? v.label : state.view)}</b> yet.${
-      state.view === "new" ? "<br>Hit <b>Fetch new jobs</b> to pull listings." : ""}</div>`;
+      (state.view === "new" || state.view === "latest") ? "<br>Hit <b>Fetch new jobs</b> to pull listings." : ""}</div>`;
     return;
   }
 
@@ -267,7 +268,10 @@ function renderCounts(counts) {
 }
 
 function renderTabs(counts) {
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  // 'all' sums the triage statuses only -- 'latest' overlaps them, so excluding
+  // it here keeps the All badge from double-counting the last fetch's jobs.
+  const total = ["new", "interested", "applied", "rejected", "archived"]
+    .reduce((a, s) => a + (counts[s] || 0), 0);
   const n = (k) => (k === "all" ? total : (counts[k] || 0));
   const el = $("#tabs");
   el.innerHTML = VIEWS.map((v) =>
@@ -680,6 +684,8 @@ async function doFetch() {
     const errs = Object.entries(r.per_source).filter(([, v]) => typeof v === "string");
     toast(`${r.total_new} new listing${r.total_new === 1 ? "" : "s"}` +
           (errs.length ? ` (${errs.map(([k]) => k).join(", ")} had issues)` : ""));
+    // Jump straight to the freshly fetched batch so they're easy to find.
+    if (r.total_new > 0) state.view = "latest";
     await loadJobs();
   } catch (e) {
     toast("Fetch failed: " + e.message);
@@ -777,6 +783,11 @@ function demoJobsView(view, minScore) {
   const all = demoStore.jobs.filter((j) => j.score >= (minScore || 0) && !demoExcluded(j));
   const counts = {};
   for (const j of all) counts[j.status] = (counts[j.status] || 0) + 1;
+  // Newest first_seen stamp = the last fetch batch (mirrors the Python backend).
+  const latest = all.reduce((m, j) => (j.first_seen && (!m || j.first_seen > m)) ? j.first_seen : m, null);
+  const latestJobs = latest ? all.filter((j) => j.first_seen === latest) : [];
+  counts.latest = latestJobs.length;
+  if (view === "latest") return { jobs: latestJobs, counts };
   return { jobs: all.filter((j) => !st || j.status === st), counts };
 }
 
