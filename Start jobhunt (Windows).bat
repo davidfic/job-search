@@ -32,13 +32,25 @@ if errorlevel 1 (
   )
 )
 
-REM 4) Start it
+REM 4) Let other devices on this network reach jobhunt (one-time firewall rule).
+REM     Only adds the rule if it isn't already there. Windows will ask for
+REM     permission the first time - click Yes. If you skip it, jobhunt still
+REM     works on THIS computer, just not from phones/laptops on your Wi-Fi.
+netsh advfirewall firewall show rule name="jobhunt" >nul 2>nul
+if errorlevel 1 (
+  echo   Allowing jobhunt through Windows Firewall so other devices can connect...
+  powershell -NoProfile -Command "Start-Process netsh -Verb RunAs -ArgumentList 'advfirewall firewall add rule name=jobhunt dir=in action=allow protocol=TCP localport=8765'" >nul 2>nul
+)
+
+REM 5) Start it, listening on every network interface (--host 0.0.0.0) so other
+REM     devices on the same Wi-Fi can reach it. The window prints the address.
 echo.
 echo   Starting...  your web browser will open in a few seconds.
 echo   - Keep this window open while you use jobhunt.
 echo   - To stop jobhunt, just close this window.
+echo   - From another device, use the "http://192.168...." address shown below.
 echo.
-".venv\Scripts\python.exe" jobhunt.py serve
+".venv\Scripts\python.exe" jobhunt.py serve --host 0.0.0.0
 pause
 exit /b 0
 

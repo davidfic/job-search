@@ -541,13 +541,37 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+def _lan_ip():
+    """Best-effort primary LAN address of this machine, or None. Uses a UDP
+    socket to a public IP -- no packets are actually sent, it just makes the OS
+    pick the interface it would route through."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
 def serve(host="127.0.0.1", port=8765, open_browser=True):
     httpd = ThreadingHTTPServer((host, port), Handler)
-    url = f"http://{host}:{port}/"
-    print(f"jobhunt web app running at {url}")
+    # The host itself always reaches the app on localhost; open the browser there
+    # even when bound to 0.0.0.0 (a browser can't connect *to* 0.0.0.0 on Windows).
+    local_url = f"http://127.0.0.1:{port}/"
+    print(f"jobhunt web app running at {local_url}")
+    public = host not in ("127.0.0.1", "localhost", "::1")
+    if public:
+        lan = _lan_ip()
+        if lan:
+            print(f"Other devices on this network:  http://{lan}:{port}/")
+        print("(Open to your local network -- there is no password, so only do "
+              "this on a network you trust.)")
     print("Press Ctrl+C to stop.")
     if open_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.6, lambda: webbrowser.open(local_url)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
