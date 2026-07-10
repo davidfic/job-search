@@ -483,6 +483,8 @@ def fetch_cl_posting(url):
     pm = _CL_COMP_RE.search(r.text)
     if pm:
         pay = re.sub(r"\s+", " ", pm.group(1)).strip().strip(".")
+        if not re.search(r"\d", pay):
+            pay = ""        # prose like "competitive" / "n/a" -- not a number
     return body[:2500], pay
 
 

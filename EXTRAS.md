@@ -1,0 +1,125 @@
+# jobhunt — extras & customization
+
+Everything that isn't needed day-to-day. For launching, using, applying, and
+updating, see the [README](README.md).
+
+---
+
+## How the scoring works
+
+Every listing passes three gates, then gets a **fit score**:
+
+1. **Hard exclude** — drops anything containing a term in `exclude_keywords.txt`
+   (ships with age limits, car/driving requirements, too-senior roles, and scams).
+   Add terms in the **Exclude** box in the app to hide matching jobs **instantly** —
+   no refetch needed.
+2. **Location filter** — keeps places reachable on the T around Davis Square, drops
+   far/car-dependent towns, and gives a bonus to walkable spots (Davis, Teele, Ball
+   Square, Tufts, Porter).
+3. **Must-have** (optional) — require a term to appear.
+
+What survives is scored: positive keywords (`summer`, `part time`, `barista`,
+`camp`, …) add points, a walkable/transit bonus is added, and soft-negative keywords
+(`manager`, `experience required`) push weaker matches down. Tune all of this live in
+the app, or in `jobhunt_config.json`.
+
+**Full-text pass:** Craigslist search results only include titles, so after each
+fetch the app politely reads the posting pages of the top new Craigslist results
+(up to `body_fetch_limit`, default 25, one page at a time with a delay). Scores —
+and your exclude keywords — then apply to the **full ad text**, and pay is picked
+up when the poster listed it. A listing whose full text trips a filter is archived
+automatically.
+
+---
+
+## Job sources
+
+| Source | On by default | Key needed? |
+|---|---|---|
+| **Craigslist** (Boston) | ✅ yes | no |
+| **Adzuna** (local distance filtering) | enabled, but idle until you add free keys | yes (free) |
+| **Jooble** (local aggregator, different inventory) | enabled, but idle until you add a free key | yes (free) |
+| RemoteOK / Remotive / We Work Remotely | off (remote-tech jobs) | no |
+
+To add more local listings, get free keys at <https://developer.adzuna.com/> and/or
+<https://jooble.org/api/about> and paste them into the `adzuna` / `jooble` sections
+of `jobhunt_config.json`.
+
+---
+
+## Change the area
+
+Everything about location lives in `jobhunt_config.json` under `location_filter`
+(swap the `walkable` / `allow` / `block` neighborhood lists and the `home`), the
+Craigslist `searches`, and `geo_data.py` (the map's coordinates and transit lines).
+
+---
+
+## Use it from your phone (Windows)
+
+On **Windows**, the start file also makes the app reachable from other devices on the
+same Wi-Fi — handy for browsing jobs from the couch. The very first time, Windows may
+show a **User Account Control** prompt asking to allow a firewall change; click **Yes**
+(this is a one-time rule that lets your phone reach the app, and it only happens once).
+
+The little window then prints an address like `http://192.168.x.x:8765` — type that
+into your phone's browser while the app is running on the PC.
+
+> There's no password on the app, so anyone on your home Wi-Fi could open it. That's
+> normally fine at home; on shared or public Wi-Fi, don't use this. On Mac and Linux
+> the app stays private to that computer.
+
+---
+
+## Updating — start clean in a new folder
+
+Want a totally fresh copy (say things feel broken)? Unzip the new `jobhunt.zip` into a
+**new, empty folder**, then copy just these four items from your old folder into it:
+
+- `jobhunt.db` — your saved jobs, statuses, notes, and sent-application log
+- `jobhunt_config.json` — your area, keyword tuning, and any API keys
+- `jobhunt_secrets.json` — your email login
+- the `resumes/` folder — the resume(s) you uploaded
+
+Start it as usual — the first launch redoes the ~1-minute setup, and you're on the new
+version with all your data intact. Once you've confirmed it works, you can delete the
+old folder.
+
+---
+
+## Privacy
+
+Everything runs and stays on your machine. These are **git-ignored and never
+committed** (see `.gitignore`): your saved jobs (`jobhunt.db`), your live config
+(`jobhunt_config.json`), your email login (`jobhunt_secrets.json`), and your uploaded
+resume (`resumes/`). The repo ships a blank `jobhunt_config.example.json` for
+reference; the app creates your real config on first run.
+
+**Be respectful:** run from a home connection (not a cloud server or VPN), fetch only
+a few times a day, review every application before sending, and keep it to personal
+use.
+
+---
+
+## For developers
+
+Pure Python standard library plus two packages (`requests`, `feedparser`); the
+front end is vanilla HTML/CSS/JS with [Leaflet](https://leafletjs.com/) for the map.
+
+```bash
+pip install requests feedparser     # or use the launcher, which makes a venv for you
+python jobhunt.py serve             # web app at http://127.0.0.1:8765
+python jobhunt.py serve --host 0.0.0.0   # also reachable from the LAN (no auth — home networks only)
+# CLI also available:
+python jobhunt.py fetch             # pull sources
+python jobhunt.py list              # browse, ranked by fit
+python jobhunt.py mark <id> interested
+python jobhunt.py report            # static HTML report
+```
+
+The cover note and follow-up email templates live in `jobhunt_config.json` under
+`outreach` (`cover_template`, `followup_template`) and are editable in **⚙ Settings**
+(cover note) or the config file directly.
+
+`docs/` is a self-contained, no-backend build (baked sample data) that powers the live
+demo via GitHub Pages, and can be hosted on any static site to show the app off.
