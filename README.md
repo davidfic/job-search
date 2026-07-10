@@ -11,6 +11,10 @@ it at any area by editing the config (see [Change the area](#change-the-area)).
 
 **▶ Live demo (click around, no install): <https://davidfic.github.io/job-search/>**
 
+> **Already using jobhunt and got a new `jobhunt.zip`?**
+> Jump straight to **[🔄 Updating to a new version](#-updating-to-a-new-version)** —
+> it takes two minutes and your saved jobs, settings, and resume are never touched.
+
 - 🔎 Pulls listings from **Craigslist** (and optionally Adzuna) and scores them by fit
 - 🗺️ **Map** of every job with the **Red Line**, **Green Line E** (out of Ball Square),
   and key Davis-area **bus routes**
