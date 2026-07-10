@@ -15,10 +15,13 @@ it at any area by editing the config (see [Change the area](#change-the-area)).
 - 🗺️ **Map** of every job with the **Red Line**, **Green Line E** (out of Ball Square),
   and key Davis-area **bus routes**
 - ✅ **Triage** tabs — mark jobs *Interested* / *Not interested*, filter instantly
+- 🆕 **“Just fetched” tab** — see only what the latest fetch pulled in, so new
+  listings never get lost in the pile
 - 🚫 **Keyword tuning** — boost good matches, hide listings you don't want, live
 - 📄 **Resume upload** that suggests good-fit keywords from your resume
 - ✉️ **Apply** from the app — find contact info, attach your resume, send or draft
 - 💾 everything is local: one SQLite file, one JSON config
+- 📱 On **Windows**, also works from your **phone or other devices** on your home Wi-Fi
 
 ---
 
@@ -61,7 +64,8 @@ and your **web browser opens automatically** to the app. If it doesn't, go to:
 
 ### Step 4 — Use it
 
-- Click **Fetch new jobs** (top right) to pull listings.
+- Click **Fetch new jobs** (top right) to pull listings. When it finishes, the app
+  jumps to the **Just fetched** tab so you see only what that fetch brought in.
 - Browse the ranked cards and the map; use the **tabs** to mark jobs
   *Interested* / *Not interested*.
 - Tune the **Keywords** boxes, upload your **resume**, and hit **Apply** on a job.
@@ -72,6 +76,69 @@ same start file.
 > **Mac tip:** the first time, if you get *“cannot be opened because it is from an
 > unidentified developer,”* **right-click** (or Control-click) the start file →
 > **Open** → **Open**. You only do this once.
+
+### 📱 Use it from your phone (Windows)
+
+On **Windows**, the start file also makes the app reachable from other devices on the
+same Wi-Fi — handy for browsing jobs from the couch. The very first time, Windows may
+show a **User Account Control** prompt asking to allow a firewall change; click **Yes**
+(this is a one-time rule that lets your phone reach the app, and it only happens once).
+
+The little window then prints an address like `http://192.168.x.x:8765` — type that
+into your phone's browser while the app is running on the PC.
+
+> There's no password on the app, so anyone on your home Wi-Fi could open it. That's
+> normally fine at home; on shared or public Wi-Fi, don't use this. On Mac and Linux
+> the app stays private to that computer.
+
+---
+
+## 🔄 Updating to a new version
+
+New versions arrive as a fresh **`jobhunt.zip`**. The good news: **your personal data
+is never inside the download**, so updating can't overwrite it. These stay put in your
+folder no matter how you update:
+
+| File / folder | What it holds |
+|---|---|
+| `jobhunt.db` | your saved jobs, statuses, notes, and sent-application log |
+| `jobhunt_config.json` | your area, keyword tuning, and any API keys |
+| `jobhunt_secrets.json` | your email login |
+| `resumes/` | the resume(s) you uploaded |
+
+### Easiest — copy the new files over the old ones (recommended)
+
+1. **Close jobhunt** — close the little window if it's still open.
+2. **Download** the new `jobhunt.zip` from the [Releases](../../releases) page and
+   **unzip** it.
+3. Open the new unzipped folder, **select everything** (`Ctrl-A`, or `Cmd-A` on Mac)
+   and **copy**.
+4. **Paste** it into your existing jobhunt folder. When it asks, choose
+   **Replace the files in the destination**.
+5. Double-click your usual start file.
+
+Your saved jobs and settings are untouched (they aren't part of the download), and
+because the one-time setup folder (`.venv`) is reused, it **starts in seconds** — no
+first-time setup wait.
+
+> **If you customized the Exclude list in the app:** those terms live in
+> `exclude_keywords.txt`, and this method resets that file to the shipped defaults. To
+> keep your own terms, make a copy of that file before you paste — or just re-add them
+> in the app afterward.
+
+### Alternative — start clean in a new folder
+
+Want a totally fresh copy (say things feel broken)? Unzip the new `jobhunt.zip` into a
+**new, empty folder**, then copy just these four items from your old folder into it:
+
+- `jobhunt.db`
+- `jobhunt_config.json`
+- `jobhunt_secrets.json`
+- the `resumes/` folder
+
+Start it as usual — the first launch redoes the ~1-minute setup, and you're on the new
+version with all your data intact. Once you've confirmed it works, you can delete the
+old folder.
 
 ---
 
@@ -155,6 +222,7 @@ front end is vanilla HTML/CSS/JS with [Leaflet](https://leafletjs.com/) for the 
 ```bash
 pip install requests feedparser     # or use the launcher, which makes a venv for you
 python jobhunt.py serve             # web app at http://127.0.0.1:8765
+python jobhunt.py serve --host 0.0.0.0   # also reachable from the LAN (no auth — home networks only)
 # CLI also available:
 python jobhunt.py fetch             # pull sources
 python jobhunt.py list              # browse, ranked by fit
