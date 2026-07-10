@@ -8,11 +8,15 @@ job-board listings point at an ATS form. So `kind` reports what we actually foun
 so the UI can react:
 
     email       a usable email address was found  -> can send/draft
-    relay_only  Craigslist reply-relay only        -> reply via CL
+    relay_only  Craigslist reply-relay only        -> user pastes the relay addr
     form_only   an ATS / application form          -> apply on the site
     none        nothing recognized                 -> open the listing
 
-We deliberately do NOT try to defeat Craigslist's relay.
+We deliberately do NOT try to defeat Craigslist's reply protection (captcha,
+rate limits). But a ...@reply.craigslist.org address IS a real, usable inbox --
+mail sent there is forwarded to the poster -- so when one is visible we keep it,
+and for relay_only the composer asks the user to click reply on the listing and
+paste the address themselves.
 """
 
 import re
@@ -84,16 +88,14 @@ def extract_contacts(html, url, source=""):
                 raw.append(addr)
     raw += EMAIL_RE.findall(text)
 
-    emails, seen, relay = [], set(), False
+    emails, seen = [], set()
     for e in raw:
         e = e.strip().strip(".").lower()
         if not e or e in seen:
             continue
         seen.add(e)
-        if e.endswith("reply.craigslist.org"):
-            relay = True               # CL relay address -- not a normal inbox
-            continue
-        if _junk_email(e):
+        # ...@reply.craigslist.org is the poster's relay inbox -- usable as-is.
+        if not e.endswith("reply.craigslist.org") and _junk_email(e):
             continue
         emails.append(e)
 

@@ -18,14 +18,15 @@ from urllib.parse import quote
 
 
 def build_cover(template, job, applicant):
-    """Fill {name}/{job_title}/{company}/{my_email}/{my_phone} in the template.
-    Missing fields become empty strings rather than raising."""
+    """Fill {name}/{job_title}/{company}/{my_email}/{my_phone}/{applied_when}
+    in the template. Missing fields become empty strings rather than raising."""
     fields = {
         "name": applicant.get("name", ""),
         "my_email": applicant.get("email", ""),
         "my_phone": applicant.get("phone", ""),
         "job_title": job.get("title", "") or "the role",
         "company": job.get("company", "") or "your team",
+        "applied_when": job.get("applied_when", "") or "recently",
     }
 
     class _Safe(dict):
@@ -40,6 +41,13 @@ def default_subject(job, applicant):
     name = applicant.get("name") or ""
     tail = f" - {name}" if name else ""
     return f"Application: {title}{tail}"
+
+
+def followup_subject(job, applicant):
+    title = job.get("title") or "your opening"
+    name = applicant.get("name") or ""
+    tail = f" - {name}" if name else ""
+    return f"Following up on my application: {title}{tail}"
 
 
 def mailto_url(to, subject, body):

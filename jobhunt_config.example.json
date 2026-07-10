@@ -156,7 +156,8 @@
           "category": "ggg",
           "query": "summer"
         }
-      ]
+      ],
+      "body_fetch_limit": 25
     },
     "remoteok": {
       "enabled": false,
@@ -184,6 +185,15 @@
       "results_per_page": 50,
       "pages": 3,
       "request_delay_seconds": 1
+    },
+    "jooble": {
+      "enabled": true,
+      "api_key": "",
+      "keywords": "part time summer",
+      "location": "Somerville, MA",
+      "radius": 10,
+      "pages": 2,
+      "request_delay_seconds": 1
     }
   },
   "applicant": {
@@ -192,6 +202,7 @@
     "phone": ""
   },
   "outreach": {
-    "cover_template": "Hi,\n\nI'm writing to apply for the {job_title} position at {company}. I'm a local, reliable, and eager to learn, and I think I'd be a great fit. My resume is attached -- I'd love to talk about the role whenever works for you.\n\nThanks for your time,\n{name}\n{my_email} | {my_phone}\n"
+    "cover_template": "Hi,\n\nI'm writing to apply for the {job_title} position at {company}. I'm a local, reliable, and eager to learn, and I think I'd be a great fit. My resume is attached -- I'd love to talk about the role whenever works for you.\n\nThanks for your time,\n{name}\n{my_email} | {my_phone}\n",
+    "followup_template": "Hi,\n\nI applied for the {job_title} position {applied_when} and wanted to check in -- I'm still very interested. I've attached my resume again in case it's helpful. Is there anything else you need from me?\n\nThanks so much,\n{name}\n{my_email} | {my_phone}\n"
   }
 }

@@ -15,7 +15,9 @@ it at any area by editing the config (see [Change the area](#change-the-area)).
 > Jump straight to **[🔄 Updating to a new version](#-updating-to-a-new-version)** —
 > it takes two minutes and your saved jobs, settings, and resume are never touched.
 
-- 🔎 Pulls listings from **Craigslist** (and optionally Adzuna) and scores them by fit
+- 🔎 Pulls listings from **Craigslist** (and optionally Adzuna and Jooble) and scores
+  them by fit — for the best Craigslist matches it reads the **full listing text**,
+  so scores and filters see the whole ad, and 💰 **pay** shows on the card when given
 - 🗺️ **Map** of every job with the **Red Line**, **Green Line E** (out of Ball Square),
   and key Davis-area **bus routes**
 - ✅ **Triage** tabs — mark jobs *Interested* / *Not interested*, filter instantly
@@ -24,6 +26,9 @@ it at any area by editing the config (see [Change the area](#change-the-area)).
 - 🚫 **Keyword tuning** — boost good matches, hide listings you don't want, live
 - 📄 **Resume upload** that suggests good-fit keywords from your resume
 - ✉️ **Apply** from the app — find contact info, attach your resume, send or draft
+  (works for Craigslist too: paste the reply address and send from here)
+- ⏰ **Follow-up nudges** — applied days ago with no reply? One click composes a
+  polite check-in email
 - 💾 everything is local: one SQLite file, one JSON config
 - 📱 On **Windows**, also works from your **phone or other devices** on your home Wi-Fi
 
@@ -181,7 +186,13 @@ the app, or in `jobhunt_config.json`.
 |---|---|---|
 | **Craigslist** (Boston) | ✅ yes | no |
 | **Adzuna** (local distance filtering) | enabled, but idle until you add free keys | yes (free) |
+| **Jooble** (local aggregator, different inventory) | enabled, but idle until you add a free key | yes (free) |
 | RemoteOK / Remotive / We Work Remotely | off (remote-tech jobs) | no |
+
+After each fetch, the app also politely reads the posting pages of the top new
+Craigslist results (up to `body_fetch_limit`, default 25) so their scores — and your
+exclude keywords — apply to the **full ad text**, not just the title, and pay is
+picked up when the poster listed it.
 
 ### Applying from the app
 
@@ -191,6 +202,17 @@ and then **sends from your own email** (if you set that up in Settings) or opens
 prefilled draft / the application page. Everything is reviewed by you, one at a time,
 and logged. See Settings for email setup (Gmail needs an **App Password**).
 
+**Craigslist listings** hide the poster's email behind a reply relay, and the app
+never tries to defeat that — instead the composer walks you through it: open the
+listing, click **reply**, copy the `…@reply.craigslist.org` address, paste it into
+**To**, and send from the app with your resume attached. (Mail to that address is
+forwarded to the poster.)
+
+**Following up:** once a job has been marked applied for 5+ days, its card shows
+*"Applied N days ago — no reply yet? Send a follow-up"*. One click opens a prefilled,
+editable check-in email addressed to wherever you originally applied. The template
+lives in the config (`outreach.followup_template`).
+
 ---
 
 ## Change the area
@@ -199,8 +221,9 @@ Everything about location lives in `jobhunt_config.json` under `location_filter`
 (swap the `walkable` / `allow` / `block` neighborhood lists and the `home`), the
 Craigslist `searches`, and `geo_data.py` (the map's coordinates and transit lines).
 
-To add more local listings, get free keys at <https://developer.adzuna.com/> and
-paste them into the `adzuna` section of `jobhunt_config.json`.
+To add more local listings, get free keys at <https://developer.adzuna.com/> and/or
+<https://jooble.org/api/about> and paste them into the `adzuna` / `jooble` sections
+of `jobhunt_config.json`.
 
 ---
 

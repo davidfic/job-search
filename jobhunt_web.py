@@ -178,6 +178,8 @@ def build_jobs(view=None, min_score=None):
             "geo": geo["matched"] if geo else None,
             "remote": bool(geo and geo["remote"]),
             "contact_kind": r["contact_kind"],
+            "pay": r["pay"] or "",
+            "applied_at": r["applied_at"] or "",
         })
     return {"jobs": jobs, "counts": counts}
 
@@ -223,12 +225,12 @@ def _get_job(jid):
     return r
 
 
-def _applicant_and_template():
+def _applicant_and_template(kind="cover_template"):
     cfg = jobhunt.load_config(merge_excludes=False)
     appl = cfg.get("applicant", {}) or {}
-    tmpl = (cfg.get("outreach", {}) or {}).get("cover_template", "")
+    tmpl = (cfg.get("outreach", {}) or {}).get(kind, "")
     if not tmpl:
-        tmpl = jobhunt.DEFAULT_CONFIG["outreach"]["cover_template"]
+        tmpl = jobhunt.DEFAULT_CONFIG["outreach"][kind]
     return appl, tmpl
 
 
@@ -265,27 +267,52 @@ def do_contact(jid):
     return info
 
 
-def build_compose(jid):
+def _last_applied_to(jid):
+    """The address the user last sent/drafted an application to for this job."""
+    conn = jobhunt.db()
+    row = conn.execute(
+        """SELECT to_addr FROM applications
+           WHERE job_id=? AND to_addr IS NOT NULL AND to_addr != ''
+           ORDER BY id DESC LIMIT 1""", (jid,)).fetchone()
+    conn.close()
+    return row["to_addr"] if row else ""
+
+
+def build_compose(jid, mode=None):
     """Everything the composer modal needs: job, cached contact, resume, applicant,
-    and a prefilled subject + cover body."""
+    and a prefilled subject + body. mode='followup' composes a check-in on an
+    application instead of a fresh cover note."""
+    followup = mode == "followup"
     r = _get_job(jid)
-    appl, tmpl = _applicant_and_template()
+    appl, tmpl = _applicant_and_template(
+        "followup_template" if followup else "cover_template")
     job = {"id": r["id"], "title": r["title"] or "", "company": r["company"] or "",
            "url": r["url"] or "", "source": r["source"] or "",
            "location": r["location"] or ""}
+    if followup and r["applied_at"]:
+        try:
+            d = jobhunt.dt.datetime.fromisoformat(r["applied_at"])
+            job["applied_when"] = f"on {d.strftime('%B')} {d.day}"
+        except ValueError:
+            pass
     contact = None
     if r["contact_kind"]:
         contact = {"kind": r["contact_kind"], "email": r["contact_email"],
                    "phone": r["contact_phone"], "apply_url": r["contact_apply_url"]}
     rmeta = resume_util.load_meta()
+    to = (contact and contact["email"]) or ""
+    if followup:
+        to = _last_applied_to(jid) or to
     return {
         "job": job,
+        "followup": followup,
         "contact": contact,
         "resume": {"filename": rmeta["filename"]} if rmeta else None,
         "applicant": {k: appl.get(k, "") for k in ("name", "email", "phone")},
         "smtp_configured": apply_util._smtp_ok(_smtp()),
-        "to": (contact and contact["email"]) or "",
-        "subject": apply_util.default_subject(job, appl),
+        "to": to,
+        "subject": (apply_util.followup_subject(job, appl) if followup
+                    else apply_util.default_subject(job, appl)),
         "body": apply_util.build_cover(tmpl, job, appl),
     }
 
@@ -433,8 +460,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/resume/file":
                 return self._serve_resume_file()
             if path == "/api/apply/compose":
-                jid = (parse_qs(u.query).get("id") or [""])[0]
-                return self._json(build_compose(jid))
+                qs = parse_qs(u.query)
+                jid = (qs.get("id") or [""])[0]
+                mode = (qs.get("mode") or [""])[0]
+                return self._json(build_compose(jid, mode or None))
             if path == "/api/applications":
                 return self._json(build_applications())
             if path == "/api/profile":

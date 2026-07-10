@@ -190,6 +190,14 @@ body.col-resizing iframe, body.col-resizing #map { pointer-events: none; }
   font: inherit; font-size: .78rem; background: #fff; }
 .geo-tag { font-size: .72rem; color: var(--muted); display: inline-flex; align-items: center; gap: .25rem; }
 .geo-tag.none { color: #b08; opacity: .7; }
+.pay-tag { font-size: .72rem; color: #047857; font-weight: 600; display: inline-flex;
+  align-items: center; gap: .2rem; max-width: 12rem; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.relay-steps { margin: .5rem 0 .3rem; padding-left: 1.3rem; font-size: .84rem;
+  display: flex; flex-direction: column; gap: .25rem; }
+.applied-line { font-size: .78rem; color: #047857; margin-top: .45rem; }
+.linklike { background: none; border: none; padding: 0; font: inherit;
+  color: #2563eb; text-decoration: underline; cursor: pointer; }
 .empty { color: var(--muted); text-align: center; padding: 2rem 1rem; }
 
 /* ---- map legend ---- */

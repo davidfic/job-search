@@ -33,6 +33,10 @@ const api = {
 const $ = (sel) => document.querySelector(sel);
 const state = { transit: {}, home: null, statuses: [], markers: new Map(), active: null, map: null, view: "new" };
 
+// After this many days with an application and no status change, the card
+// offers a one-click follow-up email.
+const FOLLOWUP_DAYS = 5;
+
 // Triage tabs: which status each view shows.
 const VIEWS = [
   { key: "latest", label: "🆕 Just fetched" },
@@ -180,6 +184,19 @@ function jobCard(job) {
   else if (job.remote) geoTag = `<span class="geo-tag">🖥️ remote</span>`;
   else geoTag = `<span class="geo-tag none">📍 location unknown</span>`;
 
+  // Applied cards show how long ago; after a quiet stretch, nudge a follow-up.
+  let appliedLine = "";
+  if (job.status === "applied" && job.applied_at) {
+    const days = Math.floor((Date.now() - new Date(job.applied_at).getTime()) / 86400000);
+    if (days >= 0) {
+      const ago = days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+      appliedLine = `<div class="applied-line">✅ Applied ${ago}${
+        days >= FOLLOWUP_DAYS
+          ? ` — no reply yet? <button class="linklike followup" type="button">Send a follow-up</button>`
+          : ""}</div>`;
+    }
+  }
+
   el.innerHTML = `
     <div class="score" style="background:${scoreColor(job.score)}">${job.score}</div>
     <div class="body">
@@ -191,11 +208,15 @@ function jobCard(job) {
         <button class="btn notg ${job.status === "rejected" ? "on" : ""}" type="button">✕ Not interested</button>
         <button class="btn apply" type="button">Apply</button>
         ${contactTag(job.contact_kind)}
+        ${job.pay ? `<span class="pay-tag">💰 ${escapeHtml(job.pay)}</span>` : ""}
         ${geoTag}
       </div>
+      ${appliedLine}
     </div>`;
 
   el.querySelector(".apply").addEventListener("click", (e) => { e.stopPropagation(); openComposer(job.id); });
+  const fu = el.querySelector(".followup");
+  if (fu) fu.addEventListener("click", (e) => { e.stopPropagation(); openComposer(job.id, "followup"); });
   el.querySelector(".intg").addEventListener("click", (e) => {
     e.stopPropagation();
     setStatus(job, job.status === "interested" ? "new" : "interested");
@@ -450,11 +471,12 @@ function modalShell(title, sub, bodyHtml) {
 }
 
 // ---- Apply composer ----
-async function openComposer(id) {
-  openModal(modalShell("Apply", "", `<p class="hint">Loading…</p>`));
+async function openComposer(id, mode) {
+  openModal(modalShell(mode === "followup" ? "Follow up" : "Apply", "", `<p class="hint">Loading…</p>`));
   $("#mClose").addEventListener("click", closeModal);
   try {
-    const c = await api.get("/api/apply/compose?id=" + encodeURIComponent(id));
+    const c = await api.get("/api/apply/compose?id=" + encodeURIComponent(id) +
+                            (mode ? "&mode=" + encodeURIComponent(mode) : ""));
     renderComposer(c);
   } catch (e) { toast("Error: " + e.message); closeModal(); }
 }
@@ -463,6 +485,11 @@ function renderComposer(c) {
   const job = c.job;
   const k = c.contact && c.contact.kind;
   const hasEmail = !!(c.contact && c.contact.email);
+  const isRelay = k === "relay_only";
+  // For a Craigslist reply-relay listing the user can paste the relay address,
+  // so the compose fields are shown even though no email was auto-found. A
+  // follow-up always composes (the address prefills from the original send).
+  const showCompose = hasEmail || isRelay || !!c.followup;
   const applyUrl = (c.contact && c.contact.apply_url) || job.url;
 
   // contact section
@@ -479,12 +506,19 @@ function renderComposer(c) {
       <div>✉ <span class="cval">${escapeHtml(c.contact.email)}</span></div>
       ${c.contact.phone ? `<div>📞 ${escapeHtml(c.contact.phone)}</div>` : ""}
     </div>`;
-  } else {
-    const msg = k === "relay_only"
-      ? "Craigslist hides the poster’s email behind its reply relay — apply through the listing page."
-      : "This listing routes to an application form — apply on the site.";
+  } else if (isRelay) {
     contactHtml = `<div class="contact-box">
-      <div class="kindline">${contactTag(k)} <span>${escapeHtml(msg)}</span></div>
+      <div class="kindline">${contactTag(k)} <span>Craigslist hides the poster’s email — but you can still apply from here:</span></div>
+      <ol class="relay-steps">
+        <li><a href="${escapeAttr(applyUrl)}" target="_blank" rel="noopener">Open the listing ↗</a> and click <b>reply</b>.</li>
+        <li>Copy the address that looks like <b>abc12-…@reply.craigslist.org</b>.</li>
+        <li>Paste it into <b>To</b> below — Craigslist forwards your email to the poster.</li>
+      </ol>
+      ${c.contact.phone ? `<div>📞 ${escapeHtml(c.contact.phone)}</div>` : ""}
+    </div>`;
+  } else {
+    contactHtml = `<div class="contact-box">
+      <div class="kindline">${contactTag(k)} <span>This listing routes to an application form — apply on the site.</span></div>
       <div><a href="${escapeAttr(applyUrl)}" target="_blank" rel="noopener">${escapeHtml(applyUrl)}</a></div>
       ${c.contact.phone ? `<div>📞 ${escapeHtml(c.contact.phone)}</div>` : ""}
     </div>`;
@@ -496,24 +530,24 @@ function renderComposer(c) {
     : `<div class="attach-line warn">⚠ No resume uploaded — add one in the sidebar to attach it.</div>`;
 
   // action buttons gated by what's available
-  const canSend = hasEmail && c.smtp_configured && c.resume;
+  const canSend = showCompose && c.smtp_configured && c.resume;
   const actions = [];
-  if (hasEmail) {
+  if (showCompose) {
     actions.push(`<button class="btn primary" id="sendBtn" ${canSend ? "" : "disabled"}>Send with resume</button>`);
     actions.push(`<button class="btn" id="draftBtn">Open email draft</button>`);
   }
   actions.push(`<button class="btn" id="openBtn">Open application page</button>`);
 
   let gateNote = "";
-  if (hasEmail && !c.smtp_configured)
+  if (showCompose && !c.smtp_configured)
     gateNote = `<div class="muted-note">To send directly with your resume attached, set up your email in <a href="#" id="toSettings">Settings</a>. Or use “Open email draft”.</div>`;
-  else if (hasEmail && !c.resume)
+  else if (showCompose && !c.resume)
     gateNote = `<div class="muted-note">Upload a resume to enable direct send.</div>`;
 
   const body = `
     ${contactHtml}
-    ${hasEmail ? `
-    <div class="field"><label>To</label><input type="text" id="cTo" value="${escapeAttr(c.to)}"></div>
+    ${showCompose ? `
+    <div class="field"><label>To</label><input type="text" id="cTo" value="${escapeAttr(c.to)}" placeholder="${isRelay && !c.to ? "paste the …@reply.craigslist.org address here" : ""}"></div>
     <div class="field"><label>Subject</label><input type="text" id="cSubject" value="${escapeAttr(c.subject)}"></div>
     <div class="field"><label>Cover note</label><textarea id="cBody">${escapeHtml(c.body)}</textarea></div>
     ${attachHtml}` : ""}
@@ -521,7 +555,8 @@ function renderComposer(c) {
     ${gateNote}
     <div class="muted-note">Applications are sent one at a time, from your own email, and marked <b>applied</b> here.</div>`;
 
-  openModal(modalShell(`Apply · ${job.title}`, [job.company, job.location].filter(Boolean).join(" · "), body));
+  openModal(modalShell(`${c.followup ? "Follow up" : "Apply"} · ${job.title}`,
+    [job.company, job.location].filter(Boolean).join(" · "), body));
   $("#mClose").addEventListener("click", closeModal);
 
   const scan = $("#scanBtn");
@@ -529,7 +564,8 @@ function renderComposer(c) {
     scan.disabled = true; scan.textContent = "Scanning…";
     try {
       await api.post("/api/contact", { id: job.id });
-      const fresh = await api.get("/api/apply/compose?id=" + encodeURIComponent(job.id));
+      const fresh = await api.get("/api/apply/compose?id=" + encodeURIComponent(job.id) +
+                                  (c.followup ? "&mode=followup" : ""));
       renderComposer(fresh);
       loadJobs();                       // refresh card contact tags
     } catch (e) { toast("Scan failed: " + e.message); scan.disabled = false; scan.textContent = "🔎 Scan listing for contact info"; }
@@ -541,7 +577,8 @@ function renderComposer(c) {
   const get = (id) => $("#" + id) ? $("#" + id).value : "";
   const sendBtn = $("#sendBtn");
   if (sendBtn) sendBtn.addEventListener("click", async () => {
-    const to = get("cTo");
+    const to = get("cTo").trim();
+    if (!to) return toast(isRelay ? "Paste the reply address from Craigslist into “To” first." : "Add a recipient address first.");
     if (!confirm(`Send your application to ${to} with ${c.resume.filename} attached?`)) return;
     sendBtn.disabled = true; sendBtn.textContent = "Sending…";
     try {
@@ -552,8 +589,10 @@ function renderComposer(c) {
 
   const draftBtn = $("#draftBtn");
   if (draftBtn) draftBtn.addEventListener("click", async () => {
+    const to = get("cTo").trim();
+    if (!to) return toast(isRelay ? "Paste the reply address from Craigslist into “To” first." : "Add a recipient address first.");
     try {
-      const r = await api.post("/api/apply/draft", { id: job.id, to: get("cTo"), subject: get("cSubject"), body: get("cBody") });
+      const r = await api.post("/api/apply/draft", { id: job.id, to, subject: get("cSubject"), body: get("cBody") });
       window.location.href = r.mailto;   // open the user's mail client
       toast("Opened email draft — attach your resume and send"); closeModal(); loadJobs();
     } catch (e) { toast("Error: " + e.message); }
@@ -762,7 +801,7 @@ function demoGet(path) {
   if (p === "/api/resume") return Promise.resolve(demoStore.resume);
   if (p === "/api/profile") return Promise.resolve(demoStore.profile);
   if (p === "/api/applications") return Promise.resolve({ applications: demoStore.applications });
-  if (p === "/api/apply/compose") return Promise.resolve(demoCompose(params.get("id")));
+  if (p === "/api/apply/compose") return Promise.resolve(demoCompose(params.get("id"), params.get("mode")));
   return Promise.reject(new Error("demo: unknown " + p));
 }
 
@@ -791,7 +830,13 @@ function demoJobsView(view, minScore) {
   return { jobs: all.filter((j) => !st || j.status === st), counts };
 }
 
-function demoCompose(id) {
+const DEMO_FOLLOWUP_TMPL =
+  "Hi,\n\nI applied for the {job_title} position recently and wanted to check in — " +
+  "I'm still very interested. I've attached my resume again in case it's helpful. " +
+  "Is there anything else you need from me?\n\nThanks so much,\n{name}\n{my_email} | {my_phone}\n";
+
+function demoCompose(id, mode) {
+  const followup = mode === "followup";
   const j = demoStore.jobs.find((x) => x.id === id) || {};
   const appl = demoStore.profile.applicant || {};
   let c = null;
@@ -799,16 +844,20 @@ function demoCompose(id) {
     c = { kind: j._contact.kind, email: (j._contact.emails || [])[0] || null,
           phone: (j._contact.phones || [])[0] || null, apply_url: j._contact.apply_url || j.url };
   }
-  const subj = `Application: ${j.title || "your opening"}${appl.name ? " - " + appl.name : ""}`;
+  const tail = appl.name ? " - " + appl.name : "";
+  const subj = followup
+    ? `Following up on my application: ${j.title || "your opening"}${tail}`
+    : `Application: ${j.title || "your opening"}${tail}`;
   return {
     job: { id: j.id, title: j.title, company: j.company, url: j.url, source: j.source, location: j.location },
+    followup,
     contact: c,
     resume: demoStore.resume.resume ? { filename: demoStore.resume.resume.filename } : null,
     applicant: { name: appl.name || "", email: appl.email || "", phone: appl.phone || "" },
     smtp_configured: false,
     to: (c && c.email) || "",
     subject: subj,
-    body: demoCover(demoStore.profile.cover_template || "", j, appl),
+    body: demoCover(followup ? DEMO_FOLLOWUP_TMPL : (demoStore.profile.cover_template || ""), j, appl),
   };
 }
 function demoCover(tmpl, job, appl) {

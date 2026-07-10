@@ -128,6 +128,10 @@ DEFAULT_CONFIG = {
         "craigslist": {
             "enabled": True,
             "request_delay_seconds": 3,
+            # After each fetch, read the posting pages of up to this many of the
+            # best new results (politely, one at a time) so scoring and the
+            # exclude filters see the full ad text, not just the title. 0 = off.
+            "body_fetch_limit": 25,
             "searches": [
                 {"city": "boston", "category": "jjj", "query": "summer"},
                 {"city": "boston", "category": "jjj", "query": "part time"},
@@ -150,6 +154,14 @@ DEFAULT_CONFIG = {
             "what": "part time summer", "where": "Somerville, Massachusetts",
             "distance": 13, "max_days_old": 30, "sort_by": "date",
             "results_per_page": 50, "pages": 3, "request_delay_seconds": 1
+        },
+
+        # Another free local aggregator (different inventory from Adzuna).
+        # Get a free key at https://jooble.org/api/about , paste it below.
+        "jooble": {
+            "enabled": True, "api_key": "",
+            "keywords": "part time summer", "location": "Somerville, MA",
+            "radius": 10, "pages": 2, "request_delay_seconds": 1
         }
     },
 
@@ -159,7 +171,8 @@ DEFAULT_CONFIG = {
     "applicant": {"name": "", "email": "", "phone": ""},
 
     # The cover message sent/drafted with your resume. Placeholders {name},
-    # {job_title}, {company}, {my_email}, {my_phone} are filled per listing.
+    # {job_title}, {company}, {my_email}, {my_phone} are filled per listing;
+    # the follow-up also gets {applied_when} ("on July 3" / "recently").
     "outreach": {
         "cover_template": (
             "Hi,\n\n"
@@ -168,6 +181,15 @@ DEFAULT_CONFIG = {
             " I'd be a great fit. My resume is attached -- I'd love to talk about"
             " the role whenever works for you.\n\n"
             "Thanks for your time,\n"
+            "{name}\n"
+            "{my_email} | {my_phone}\n"
+        ),
+        "followup_template": (
+            "Hi,\n\n"
+            "I applied for the {job_title} position {applied_when} and wanted to"
+            " check in -- I'm still very interested. I've attached my resume again"
+            " in case it's helpful. Is there anything else you need from me?\n\n"
+            "Thanks so much,\n"
             "{name}\n"
             "{my_email} | {my_phone}\n"
         )
@@ -207,6 +229,12 @@ def load_config(merge_excludes=True):
         sys.exit(f"No config found. Run:  python {os.path.basename(__file__)} init")
     with open(CONFIG_PATH, encoding="utf-8") as f:
         cfg = json.load(f)
+    # Configs written by an older version may predate newer sources (e.g.
+    # jooble) -- fill any missing section from the defaults so upgrades just
+    # work. Deep-copied so edits never leak back into DEFAULT_CONFIG.
+    sources = cfg.setdefault("sources", {})
+    for name, sdef in DEFAULT_CONFIG["sources"].items():
+        sources.setdefault(name, json.loads(json.dumps(sdef)))
     if merge_excludes:
         prof = cfg.get("profile", {})
         inline = [t.lower() for t in prof.get("exclude", [])]
@@ -248,6 +276,7 @@ _JOB_EXTRA_COLUMNS = [
     ("contact_apply_url", "TEXT"),
     ("contact_kind", "TEXT"),
     ("contact_fetched_at", "TEXT"),
+    ("pay", "TEXT"),
 ]
 
 
@@ -390,6 +419,14 @@ _CL_BLOCK_RE = re.compile(r'<li class="cl-static-search-result".*?</li>', re.S)
 _CL_HREF_RE = re.compile(r'<a[^>]+href="([^"]+)"')
 _CL_TITLE_RE = re.compile(r'<div class="title">(.*?)</div>', re.S)
 _CL_LOC_RE = re.compile(r'<div class="location">\s*(.*?)\s*</div>', re.S)
+_CL_PRICE_RE = re.compile(r'<div class="price">\s*(.*?)\s*</div>', re.S)
+
+_TAG_RE = re.compile(r"(?s)<[^>]+>")
+
+
+def strip_tags(s):
+    """Drop HTML tags and collapse whitespace -- for listing snippets/bodies."""
+    return re.sub(r"\s+", " ", html.unescape(_TAG_RE.sub(" ", s or ""))).strip()
 
 
 def src_craigslist(cfg):
@@ -408,6 +445,7 @@ def src_craigslist(cfg):
                 continue
             mt = _CL_TITLE_RE.search(block)
             ml = _CL_LOC_RE.search(block)
+            mp = _CL_PRICE_RE.search(block)
             out.append({
                 "source": f"craigslist/{city}",
                 "title": html.unescape(mt.group(1).strip()) if mt else "",
@@ -416,9 +454,86 @@ def src_craigslist(cfg):
                 "url": mu.group(1),
                 "summary": "",          # the listing body is on the posting page
                 "posted": "",
+                "pay": html.unescape(mp.group(1).strip()) if mp else "",
             })
         time.sleep(delay)  # be polite; CL blocks aggressive pollers
     return out
+
+
+# A Craigslist posting page: the ad text lives in <section id="postingbody">, and
+# pay (when given) is a "compensation:" attribute rendered either as
+#   <span class="labl">compensation:</span> <span class="valu">$18/hr</span>
+# or, on older pages, <span>compensation: <b>$18/hr</b></span>.
+_CL_BODY_RE = re.compile(r'(?is)<section id="postingbody"[^>]*>(.*?)</section>')
+_CL_COMP_RE = re.compile(r'(?is)compensation:\s*(?:</span>\s*<span[^>]*>|<b>)?\s*([^<]{1,100})')
+
+
+def fetch_cl_posting(url):
+    """Fetch ONE Craigslist posting page; return (body_text, pay), either may be
+    ''. Callers control pacing -- never loop this without a delay."""
+    if requests is None:
+        raise RuntimeError(_MISSING_DEPS)
+    r = requests.get(url, headers={"User-Agent": UA}, timeout=20)
+    r.raise_for_status()
+    body = ""
+    m = _CL_BODY_RE.search(r.text)
+    if m:
+        body = strip_tags(m.group(1)).replace("QR Code Link to This Post", "").strip()
+    pay = ""
+    pm = _CL_COMP_RE.search(r.text)
+    if pm:
+        pay = re.sub(r"\s+", " ", pm.group(1)).strip().strip(".")
+    return body[:2500], pay
+
+
+def enrich_craigslist_bodies(conn, cfg, batch_stamp, on_progress=None):
+    """Craigslist search results carry no body text, so new CL rows are scored on
+    the title alone. Read the posting pages of this fetch's top-scoring listings
+    (politely, capped by sources.craigslist.body_fetch_limit), store the ad text
+    as the summary, pick up pay, and rescore against the full text. A row whose
+    full text now trips a hard filter is archived -- not deleted, so the next
+    fetch doesn't re-store and re-read it."""
+    scfg = cfg.get("sources", {}).get("craigslist", {})
+    limit = scfg.get("body_fetch_limit", 25)
+    if not (scfg.get("enabled") and limit):
+        return 0
+    rows = conn.execute(
+        """SELECT id, url, title, company, location, pay FROM jobs
+           WHERE first_seen=? AND source LIKE 'craigslist%'
+             AND (summary IS NULL OR summary='')
+           ORDER BY score DESC LIMIT ?""",
+        (batch_stamp, limit)).fetchall()
+    if not rows:
+        return 0
+    if on_progress:
+        on_progress("craigslist", f"reading {len(rows)} listing pages for full-text scores...")
+    delay = scfg.get("request_delay_seconds", 3)
+    profile, locf = cfg["profile"], cfg.get("location_filter")
+    done = 0
+    for i, r in enumerate(rows):
+        if i:
+            time.sleep(delay)
+        try:
+            body, pay = fetch_cl_posting(r["url"])
+        except Exception:
+            continue                    # posting gone or blocked; keep title-only score
+        if not body and not pay:
+            continue
+        sc = score_job({"title": r["title"], "company": r["company"],
+                        "location": r["location"], "summary": body}, profile, locf)
+        if sc is None:
+            conn.execute(
+                """UPDATE jobs SET summary=?, pay=?, status='archived',
+                   note='hidden: the full listing text matched an exclude/filter' WHERE id=?""",
+                (body, pay or r["pay"], r["id"]))
+        else:
+            conn.execute("UPDATE jobs SET summary=?, pay=?, score=? WHERE id=?",
+                         (body, pay or r["pay"], sc, r["id"]))
+        done += 1
+    conn.commit()
+    if on_progress:
+        on_progress("craigslist", f"scored {done} full listings")
+    return done
 
 
 def src_remoteok(cfg):
@@ -527,12 +642,54 @@ def src_adzuna(cfg):
     return out
 
 
+def src_jooble(cfg):
+    """Jooble aggregates many boards; its free API is a POST with the key in the
+    URL. Titles/snippets come back with highlight markup, so strip tags."""
+    if requests is None:
+        raise RuntimeError(_MISSING_DEPS)
+    if not cfg.get("api_key"):
+        print("  jooble: add a free api_key to config for more local listings "
+              "(https://jooble.org/api/about) -- skipping")
+        return []
+    payload = {"keywords": cfg.get("keywords", ""),
+               "location": cfg.get("location", "")}
+    if cfg.get("radius"):
+        payload["radius"] = str(cfg["radius"])       # miles around 'location'
+    pages = max(1, cfg.get("pages", 1))
+    delay = cfg.get("request_delay_seconds", 1)
+
+    out = []
+    for page in range(1, pages + 1):
+        payload["page"] = str(page)
+        r = requests.post(f"https://jooble.org/api/{cfg['api_key']}",
+                          json=payload, headers={"User-Agent": UA}, timeout=20)
+        r.raise_for_status()
+        jobs = r.json().get("jobs", [])
+        for j in jobs:
+            out.append({
+                "source": "jooble",
+                "title": strip_tags(j.get("title", "")),
+                "company": strip_tags(j.get("company", "")),
+                "location": strip_tags(j.get("location", "")),
+                "url": j.get("link", ""),
+                "summary": strip_tags(j.get("snippet", "")),
+                "posted": j.get("updated", ""),
+                "pay": strip_tags(j.get("salary", "")),
+            })
+        if not jobs:
+            break                                    # past the last page
+        if page < pages:
+            time.sleep(delay)
+    return out
+
+
 SOURCES = {
     "craigslist": src_craigslist,
     "remoteok": src_remoteok,
     "remotive": src_remotive,
     "weworkremotely": src_weworkremotely,
     "adzuna": src_adzuna,
+    "jooble": src_jooble,
 }
 
 
@@ -587,10 +744,11 @@ def fetch_jobs(conn, cfg, on_progress=None):
             conn.execute(
                 """INSERT INTO jobs
                    (id, source, title, company, location, url, summary,
-                    posted, first_seen, score, status)
-                   VALUES (?,?,?,?,?,?,?,?,?,?, 'new')""",
+                    posted, first_seen, score, status, pay)
+                   VALUES (?,?,?,?,?,?,?,?,?,?, 'new', ?)""",
                 (jid, j["source"], j["title"], j["company"], j["location"],
-                 j["url"], j["summary"], j["posted"], now, sc))
+                 j["url"], j["summary"], j["posted"], now, sc,
+                 j.get("pay") or None))
             new_here += 1
             fresh_top.append((sc, j["source"], j["title"], jid))
         per_source[name] = new_here
@@ -599,6 +757,15 @@ def fetch_jobs(conn, cfg, on_progress=None):
             on_progress(name, f"{new_here} new")
 
     conn.commit()
+
+    # Second pass: pull the ad text for the best new Craigslist rows so their
+    # scores (and the exclude filters) see the whole listing, not just the title.
+    try:
+        enrich_craigslist_bodies(conn, cfg, now, on_progress)
+    except Exception as e:  # noqa: BLE001 -- enrichment must never break a fetch
+        if on_progress:
+            on_progress("craigslist", f"body pass skipped ({e})")
+
     fresh_top.sort(reverse=True)
     return {"total_new": total_new, "per_source": per_source, "top": fresh_top[:10]}
 
