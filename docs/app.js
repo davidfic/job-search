@@ -31,7 +31,8 @@ const api = {
 };
 
 const $ = (sel) => document.querySelector(sel);
-const state = { transit: {}, home: null, statuses: [], markers: new Map(), active: null, map: null, view: "new" };
+const state = { transit: {}, home: null, statuses: [], markers: new Map(), active: null, map: null, view: "new",
+                jobsData: null, radius: { on: false, miles: 3, circle: null } };
 
 // After this many days with an application and no status change, the card
 // offers a one-click follow-up email.
@@ -111,6 +112,59 @@ function buildLegend(transit) {
   rows.push(`<div class="lrow"><span class="swatch dash"></span>key Davis buses (87/88/89/94/96)</div>`);
   rows.push(`<div class="lrow muted" style="margin-top:.4rem">● job — color = fit score</div>`);
   $("#legend").innerHTML = `<h4>Getting there</h4>${rows.join("")}`;
+}
+
+// --------------------------------------------------------------------------- //
+// radius filter: circle around home, jobs outside it are hidden
+// --------------------------------------------------------------------------- //
+const RADIUS_KEY = "jobhunt_radius";
+
+function loadRadiusPref() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RADIUS_KEY) || "null");
+    if (saved) {
+      state.radius.on = !!saved.on;
+      const m = +saved.miles;
+      if (m >= 0.5 && m <= 10) state.radius.miles = m;
+    }
+  } catch { /* corrupt pref -> defaults */ }
+}
+
+function saveRadiusPref() {
+  localStorage.setItem(RADIUS_KEY, JSON.stringify({ on: state.radius.on, miles: state.radius.miles }));
+}
+
+function milesBetween(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 3958.8 * Math.asin(Math.sqrt(a));
+}
+
+// Jobs we couldn't geocode stay visible -- the filter only drops listings we
+// know are outside the circle.
+function withinRadius(job) {
+  if (!state.radius.on || job.lat == null) return true;
+  return milesBetween(state.home.lat, state.home.lng, job.lat, job.lng) <= state.radius.miles;
+}
+
+function updateRadiusCircle() {
+  const r = state.radius;
+  if (!state.map) return;
+  if (!r.on) {
+    if (r.circle) { state.map.removeLayer(r.circle); r.circle = null; }
+    return;
+  }
+  const meters = r.miles * 1609.344;
+  if (r.circle) {
+    r.circle.setRadius(meters);
+  } else {
+    r.circle = L.circle([state.home.lat, state.home.lng], {
+      radius: meters, color: "#2563eb", weight: 1.5, dashArray: "6 6",
+      fillColor: "#2563eb", fillOpacity: 0.05, interactive: false,
+    }).addTo(state.map);
+  }
 }
 
 // spread markers that resolve to the same coordinate so they don't stack
@@ -247,12 +301,18 @@ function renderJobs(data) {
   for (const m of state.markers.values()) state.map.removeLayer(m);
   state.markers.clear();
 
-  const jobs = data.jobs;
-  $("#resultCount").textContent = `${jobs.length} listing${jobs.length === 1 ? "" : "s"} shown`;
+  const jobs = data.jobs.filter(withinRadius);
+  const outside = data.jobs.length - jobs.length;
+  $("#resultCount").textContent = `${jobs.length} listing${jobs.length === 1 ? "" : "s"} shown` +
+    (outside ? ` · ${outside} outside radius` : "");
   renderCounts(data.counts);
   renderTabs(data.counts);
 
   if (!jobs.length) {
+    if (outside) {
+      list.innerHTML = `<div class="empty">All ${outside} listing${outside === 1 ? " is" : "s here are"} outside your ${state.radius.miles} mi radius.<br>Widen the radius or turn it off to see them.</div>`;
+      return;
+    }
     const v = VIEWS.find((x) => x.key === state.view);
     list.innerHTML = `<div class="empty">Nothing in <b>${escapeHtml(v ? v.label : state.view)}</b> yet.${
       (state.view === "new" || state.view === "latest") ? "<br>Hit <b>Fetch new jobs</b> to pull listings." : ""}</div>`;
@@ -689,7 +749,13 @@ async function openOutbox() {
 async function loadJobs() {
   const min = $("#minScore").value;
   const data = await api.get(`/api/jobs?view=${encodeURIComponent(state.view)}&min_score=${min}`);
+  state.jobsData = data;
   renderJobs(data);
+}
+
+// re-apply client-side filters (radius) without refetching
+function rerenderJobs() {
+  if (state.jobsData) renderJobs(state.jobsData);
 }
 
 function wireKeywordForms() {
@@ -759,6 +825,29 @@ async function init() {
 
   ms.addEventListener("input", () => { $("#minScoreVal").textContent = ms.value; });
   ms.addEventListener("change", loadJobs);
+
+  // radius filter: restore saved pref, then keep circle + list in sync
+  loadRadiusPref();
+  const rOn = $("#radiusOn"), rSlider = $("#radius");
+  rOn.checked = state.radius.on;
+  rSlider.value = state.radius.miles;
+  rSlider.disabled = !state.radius.on;
+  $("#radiusVal").textContent = state.radius.miles;
+  updateRadiusCircle();
+  rOn.addEventListener("change", () => {
+    state.radius.on = rOn.checked;
+    rSlider.disabled = !rOn.checked;
+    saveRadiusPref();
+    updateRadiusCircle();
+    rerenderJobs();
+  });
+  rSlider.addEventListener("input", () => {
+    state.radius.miles = +rSlider.value;
+    $("#radiusVal").textContent = rSlider.value;
+    saveRadiusPref();
+    updateRadiusCircle();
+    rerenderJobs();
+  });
   $("#fetchBtn").addEventListener("click", doFetch);
   $("#settingsBtn").addEventListener("click", openSettings);
   $("#outboxBtn").addEventListener("click", openOutbox);

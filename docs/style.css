@@ -110,6 +110,9 @@ body.col-resizing iframe, body.col-resizing #map { pointer-events: none; }
 .field > span { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .25rem; }
 .field select, .field input[type=range] { width: 100%; }
 .field select { padding: .4rem; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.radius-toggle { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--muted);
+  margin-bottom: .25rem; cursor: pointer; }
+.radius-field input[type=range]:disabled { opacity: .35; }
 .hint { color: var(--muted); font-size: .78rem; margin: .3rem 0 .6rem; }
 
 /* ---- keyword chips ---- */
