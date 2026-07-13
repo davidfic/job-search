@@ -146,6 +146,7 @@ version back.
 | *“Python is not installed”* | Do the install step above, then double-click the start file again. On Windows, make sure you checked **Add Python to PATH**. |
 | **No jobs appear** after Fetch | Check your internet, and **turn off any VPN** — Craigslist blocks VPNs and office networks. A normal home connection works. |
 | The window closes by itself | Re-open the start file. If it keeps happening, screenshot any red text and ask for help. |
+| **Something broke right after an update** | jobhunt restores the previous version automatically. If the app won't open at all, use the **Manual update** steps above to lay down fresh files — your data is safe either way. |
 | Mac won't open the start file | Right-click → **Open** (see the Mac tip above). |
 
 ---

@@ -74,6 +74,20 @@ double-click the same start file.
 
 
 ------------------------------------------------------------
+  UPDATES  —  automatic
+------------------------------------------------------------
+
+jobhunt keeps itself up to date. When a new version is ready,
+a green "Update" button appears at the top of the app. Click
+it, then click "Update now" — it installs, restarts, and the
+page reloads by itself.
+
+Your saved jobs, settings, and resume are never touched by an
+update. If a new version ever fails to start, the previous
+version is put back automatically.
+
+
+------------------------------------------------------------
   IF SOMETHING DOESN'T WORK
 ------------------------------------------------------------
 

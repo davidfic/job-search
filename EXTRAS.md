@@ -73,7 +73,10 @@ into your phone's browser while the app is running on the PC.
 
 ## Updating — start clean in a new folder
 
-Want a totally fresh copy (say things feel broken)? Unzip the new `jobhunt.zip` into a
+Normally you never need this — jobhunt updates itself from inside the app (the
+green **⬆ Update** button; see the [README](README.md#-updating-to-a-new-version)).
+But if you want a totally fresh copy (say things feel broken), download the repo
+zip from GitHub (green **Code** button → Download ZIP), unzip it into a
 **new, empty folder**, then copy just these four items from your old folder into it:
 
 - `jobhunt.db` — your saved jobs, statuses, notes, and sent-application log
@@ -103,11 +106,12 @@ use.
 
 ## For developers
 
-Pure Python standard library plus two packages (`requests`, `feedparser`); the
-front end is vanilla HTML/CSS/JS with [Leaflet](https://leafletjs.com/) for the map.
+Pure Python standard library plus two packages (`requests`, `feedparser` — see
+`requirements.txt`); the front end is vanilla HTML/CSS/JS with
+[Leaflet](https://leafletjs.com/) for the map.
 
 ```bash
-pip install requests feedparser     # or use the launcher, which makes a venv for you
+pip install -r requirements.txt     # or use the launcher, which makes a venv for you
 python jobhunt.py serve             # web app at http://127.0.0.1:8765
 python jobhunt.py serve --host 0.0.0.0   # also reachable from the LAN (no auth — home networks only)
 # CLI also available:
@@ -116,6 +120,18 @@ python jobhunt.py list              # browse, ranked by fit
 python jobhunt.py mark <id> interested
 python jobhunt.py report            # static HTML report
 ```
+
+**How in-app updates work:** the start files run `_boot.py`, a small stdlib-only
+supervisor that installs `requirements.txt` when it changes, restarts the server
+when it exits with code 42 (the "I just updated myself" signal), and — right
+after an update — health-checks the new server, restoring `.backup/` and
+relaunching the old version if it won't boot. `update_util.py` does the check
+(GitHub commits API, compared against `version.json`) and the swap (the repo
+zipball, extracting **only** paths whitelisted in `update_manifest.json`; the
+db, config, secrets, resumes, and exclude list can never be written). Inside a
+git checkout the updater disables itself — update with `git pull`. Note that
+**pushing to `main` is publishing**: every install offers it as an update within
+a day, so keep experiments on branches.
 
 The cover note and follow-up email templates live in `jobhunt_config.json` under
 `outreach` (`cover_template`, `followup_template`) and are editable in **⚙ Settings**
