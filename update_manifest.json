@@ -1,0 +1,23 @@
+{
+  "_comment": "Files the in-app updater is allowed to replace. Personal data (db, config, secrets, resumes, exclude_keywords.txt) can never be listed here -- update_util.py refuses protected paths. Paths ending in / cover the whole folder.",
+  "paths": [
+    "jobhunt.py",
+    "jobhunt_web.py",
+    "apply_util.py",
+    "contact_util.py",
+    "resume_util.py",
+    "geo_data.py",
+    "update_util.py",
+    "_boot.py",
+    "requirements.txt",
+    "update_manifest.json",
+    "web/",
+    "Start jobhunt (Windows).bat",
+    "Start jobhunt (Mac).command",
+    "start-jobhunt (Linux).sh",
+    "README.md",
+    "EXTRAS.md",
+    "READ ME FIRST.txt",
+    "jobhunt_config.example.json"
+  ]
+}

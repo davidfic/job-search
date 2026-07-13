@@ -7,9 +7,10 @@ and lets you apply and follow up without leaving the app.
 
 **▶ Live demo (click around, no install): <https://davidfic.github.io/job-search/>**
 
-> **Already using jobhunt and got a new `jobhunt.zip`?**
-> Jump straight to **[🔄 Updating to a new version](#-updating-to-a-new-version)** —
-> it takes two minutes and your saved jobs, settings, and resume are never touched.
+> **Already using jobhunt?** It updates itself — when a new version is ready, a
+> green **⬆ Update** button appears in the app. One click, and your saved jobs,
+> settings, and resume are never touched. Details in
+> **[🔄 Updating to a new version](#-updating-to-a-new-version)**.
 
 It ships set up for a real example: finding a summer job around **Davis Square,
 Somerville MA**. Different area? See [EXTRAS.md](EXTRAS.md#change-the-area).
@@ -27,8 +28,9 @@ check **“Add Python to PATH”** before clicking *Install Now* — this is the
 people miss.
 
 **Step 2 — Get the files.**
-Download the latest **`jobhunt.zip`** from the [**Releases**](../../releases) page
-and unzip it. *(Or `git clone` this repo.)*
+On the [repo page](../../), click the green **Code** button → **Download ZIP**,
+and unzip it. *(Or `git clone` this repo.)* You only do this once — after that,
+jobhunt updates itself from inside the app.
 
 **Step 3 — Start it.** Open the folder and double-click the start file for your
 computer:
@@ -109,21 +111,31 @@ reply — send them.
 
 ## 🔄 Updating to a new version
 
-New versions arrive as a fresh **`jobhunt.zip`**. Your personal data — saved jobs
-(`jobhunt.db`), settings (`jobhunt_config.json`), email login
-(`jobhunt_secrets.json`), and your `resumes/` folder — is **never inside the
-download**, so updating can't overwrite it.
+**jobhunt updates itself.** When a new version is ready, a green **⬆ Update**
+button appears at the top of the app. Click it, read what's new, click
+**Update now** — the app installs the new version, restarts, and the page
+reloads on its own. That's it.
+
+Your personal data — saved jobs (`jobhunt.db`), settings
+(`jobhunt_config.json`), email login (`jobhunt_secrets.json`), your Exclude
+list, and your `resumes/` folder — is **never touched by an update**. And if a
+new version somehow fails to start, jobhunt automatically puts the previous
+version back.
+
+> **Updating from an older jobhunt (before in-app updates)?** The very first
+> update asks you to close the jobhunt window and double-click your start file
+> once more. Every update after that finishes on its own.
+
+<details>
+<summary><b>Manual update</b> (fallback — you shouldn't normally need this)</summary>
 
 1. **Close jobhunt** (close the little window).
-2. **Download** the new `jobhunt.zip` from [Releases](../../releases) and unzip it.
-3. In the new folder, **select everything** (`Ctrl-A` / `Cmd-A`) and **copy**.
-4. **Paste into your existing jobhunt folder**, choosing **Replace the files in
-   the destination**.
-5. Double-click your usual start file — it starts in seconds, data intact.
-
-> Customized the **Exclude** list in the app? Copy `exclude_keywords.txt` aside
-> first — this method resets it to the shipped defaults. Prefer a totally fresh
-> start instead? See [EXTRAS.md](EXTRAS.md#updating--start-clean-in-a-new-folder).
+2. **Download** the repo zip from GitHub (green **Code** button → Download ZIP)
+   and unzip it.
+3. Copy the new files into your existing jobhunt folder, choosing **Replace**.
+   Your data files aren't in the download, so they can't be overwritten.
+4. Double-click your usual start file.
+</details>
 
 ---
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # jobhunt launcher (Mac / Linux)
-# First run: sets up a small private Python environment and downloads the two
-# components it needs. After that it just starts the app and opens your browser.
+# Sets up a small private Python environment the first time, then starts the
+# app via _boot.py, which installs components and handles in-app updates.
 # You never have to type anything — just double-click this file.
 
 cd "$(dirname "$0")" || exit 1
@@ -35,23 +35,11 @@ if [ ! -d ".venv" ]; then
   echo "  First-time setup — this takes about a minute, please wait..."
   "$PY" -m venv .venv || { echo "  Setup failed."; read -r -p "  Press Enter to close. " _; exit 1; }
 fi
-VPY=".venv/bin/python"
 
-# 3) Install the two components we need (only if they're missing)
-if ! "$VPY" -c 'import requests, feedparser' >/dev/null 2>&1; then
-  echo "  Installing components (this needs an internet connection)..."
-  "$VPY" -m pip install --quiet --upgrade pip >/dev/null 2>&1
-  if ! "$VPY" -m pip install --quiet requests feedparser; then
-    echo "  Could not download components — please check your internet connection."
-    read -r -p "  Press Enter to close. " _
-    exit 1
-  fi
-fi
-
-# 4) Start it
+# 3) Start it (the supervisor installs components when needed)
 echo
 echo "  Starting…  your web browser will open in a few seconds."
 echo "  ▸ Keep this window open while you use jobhunt."
 echo "  ▸ To stop jobhunt, just close this window."
 echo
-"$VPY" jobhunt.py serve
+".venv/bin/python" _boot.py serve

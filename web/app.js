@@ -744,6 +744,107 @@ async function openOutbox() {
 }
 
 // --------------------------------------------------------------------------- //
+// in-app updates
+// --------------------------------------------------------------------------- //
+function fmtVersion(v) {
+  if (!v || !v.sha) return "unknown version";
+  return `${(v.date || "").slice(0, 10)} · ${v.sha.slice(0, 7)}`;
+}
+
+// One-shot toast for the result of the last update (written during restart).
+async function showUpdateResult() {
+  try {
+    const s = await api.get("/api/update/status");
+    if (!s.result) return;
+    if (s.result.status === "updated") {
+      toast(`✓ Updated to version ${fmtVersion(s.current)}`, 5000);
+    } else if (s.result.status === "rolled_back") {
+      toast("⚠ The update didn't start correctly, so the previous version was restored.", 8000);
+    }
+  } catch { /* endpoint may not exist mid-migration */ }
+}
+
+async function checkForUpdate() {
+  let info;
+  try { info = await api.get("/api/update/check"); } catch { return; }
+  if (!info.available) return;
+  const btn = $("#updateBtn");
+  btn.hidden = false;
+  btn.onclick = () => openUpdateModal(info);
+}
+
+function openUpdateModal(info) {
+  const notes = (info.notes || []).length
+    ? `<div class="update-notes"><h3>What's new</h3><ul>` +
+      info.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("") + `</ul></div>`
+    : (info.first_update
+        ? `<p class="hint">This install predates version tracking, so there's no change list yet — after this update you'll always see what's new.</p>`
+        : "");
+  const body = `
+    <p>A new version of jobhunt is ready.</p>
+    <div class="update-vers">
+      <span>You have: <b>${escapeHtml(fmtVersion(info.current))}</b></span>
+      <span>Latest: <b>${escapeHtml(fmtVersion(info.latest))}</b></span>
+    </div>
+    ${notes}
+    <div class="modal-actions">
+      <button class="btn primary" id="updNow">Update now</button>
+      <button class="btn" id="updLater">Not now</button>
+    </div>
+    <div class="muted-note">Your saved jobs, settings, resume, and email login are never touched by an update.</div>`;
+  openModal(modalShell("Update jobhunt", "", body));
+  $("#mClose").addEventListener("click", closeModal);
+  $("#updLater").addEventListener("click", closeModal);
+  $("#updNow").addEventListener("click", applyUpdate);
+}
+
+async function applyUpdate() {
+  const btn = $("#updNow");
+  btn.disabled = true;
+  btn.textContent = "Updating…";
+  let r;
+  try { r = await api.post("/api/update/apply", {}); }
+  catch (e) {
+    toast("Update failed: " + e.message, 6000);
+    btn.disabled = false;
+    btn.textContent = "Update now";
+    return;
+  }
+  if (!r.restarting) {
+    // Old launcher (no supervisor yet): the files are updated, but the running
+    // server can't restart itself. One manual restart finishes the migration.
+    openModal(modalShell("Update installed ✓", "", `
+      <p>One last step to finish this update:</p>
+      <ol class="relay-steps">
+        <li><b>Close the little jobhunt window</b> (the black text window).</li>
+        <li><b>Double-click your usual start file</b> to open jobhunt again.</li>
+      </ol>
+      <p class="hint">Future updates finish on their own — this extra step is one time only.</p>`));
+    $("#mClose").addEventListener("click", closeModal);
+    return;
+  }
+  openModal(modalShell("Updating…", "", `
+    <p>Installing the new version and restarting. This page reloads by itself
+    in a few seconds.</p>`));
+  waitForRestart();
+}
+
+async function waitForRestart() {
+  const start = Date.now();
+  let sawDown = false;
+  while (Date.now() - start < 90000) {
+    await new Promise((res) => setTimeout(res, 1000));
+    try {
+      const r = await fetch("/api/state");
+      // Ignore replies from the old process (it exits ~1s after answering);
+      // reload once the server has gone down and come back.
+      if (r.ok && (sawDown || Date.now() - start > 20000)) return location.reload();
+    } catch { sawDown = true; }
+  }
+  location.reload();   // last resort -- let the page show whatever state exists
+}
+
+// --------------------------------------------------------------------------- //
 // wiring
 // --------------------------------------------------------------------------- //
 async function loadJobs() {
@@ -860,6 +961,7 @@ async function init() {
   } else if (!s.adzuna_ready) {
     toast("Tip: add free Adzuna keys to the config for local distance filtering", 5000);
   }
+  if (!DEMO) { showUpdateResult(); checkForUpdate(); }
   await loadJobs();
   setTimeout(() => state.map.invalidateSize(), 200);
 }

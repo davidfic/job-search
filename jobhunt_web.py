@@ -19,6 +19,9 @@ API:
   GET  /api/applications                 the outbox / application log
   GET/POST /api/profile                  applicant identity, cover template, SMTP
   POST /api/smtp/test {smtp}             test the email connection
+  GET  /api/update/check?force=1         is a newer version on GitHub?
+  POST /api/update/apply                 download + install it, then restart
+  GET  /api/update/status                result of the last update (shown once)
 """
 
 import json
@@ -34,6 +37,7 @@ import geo_data
 import resume_util
 import contact_util
 import apply_util
+import update_util
 
 WEB_DIR = os.path.join(jobhunt.HERE, "web")
 
@@ -113,6 +117,7 @@ def build_state():
         "home": geo_data.HOME,
         "transit": geo_data.TRANSIT,
         "adzuna_ready": bool(az.get("enabled") and az.get("app_id") and az.get("app_key")),
+        "app_version": update_util.current_version(),
     }
 
 
@@ -421,6 +426,38 @@ def do_smtp_test(b):
 
 
 # --------------------------------------------------------------------------- #
+# In-app updates
+# --------------------------------------------------------------------------- #
+def _supervised():
+    """True when _boot.py launched us -- it restarts the server on exit code 42."""
+    return os.environ.get("JOBHUNT_SUPERVISED") == "1"
+
+
+def do_update_apply():
+    summary = update_util.apply_update()
+    summary["restarting"] = _supervised()
+    if _supervised():
+        # Answer this request first, then hand control back to _boot.py, which
+        # starts the new version (and rolls back if it won't boot).
+        threading.Timer(0.8, lambda: os._exit(update_util.RESTART_EXIT_CODE)).start()
+    return summary
+
+
+def update_status():
+    """One-shot result of the last update attempt, written by _boot.py after
+    the restart. Read-and-delete so the toast shows exactly once."""
+    path = os.path.join(jobhunt.HERE, ".update_result.json")
+    result = None
+    try:
+        with open(path, encoding="utf-8") as f:
+            result = json.load(f)
+        os.remove(path)
+    except (OSError, ValueError):
+        pass
+    return {"result": result, "current": update_util.current_version()}
+
+
+# --------------------------------------------------------------------------- #
 # HTTP handler
 # --------------------------------------------------------------------------- #
 class Handler(BaseHTTPRequestHandler):
@@ -468,6 +505,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(build_applications())
             if path == "/api/profile":
                 return self._json(build_profile())
+            if path == "/api/update/check":
+                force = (parse_qs(u.query).get("force") or ["0"])[0] == "1"
+                return self._json(update_util.check(force=force))
+            if path == "/api/update/status":
+                return self._json(update_status())
             return self._serve_static(path)
         except KeyError as e:
             return self._json({"error": f"no job {e}"}, 404)
@@ -513,6 +555,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(save_profile(self._body()))
             if path == "/api/smtp/test":
                 return self._json(do_smtp_test(self._body()))
+            if path == "/api/update/apply":
+                with _LOCK:
+                    return self._json(do_update_apply())
             if path == "/api/mark":
                 b = self._body()
                 do_mark(b.get("id"), b.get("status"), b.get("note"))
@@ -590,7 +635,9 @@ def serve(host="127.0.0.1", port=8765, open_browser=True):
     # The host itself always reaches the app on localhost; open the browser there
     # even when bound to 0.0.0.0 (a browser can't connect *to* 0.0.0.0 on Windows).
     local_url = f"http://127.0.0.1:{port}/"
-    print(f"jobhunt web app running at {local_url}")
+    v = update_util.current_version()
+    ver = f"  (version {v['sha'][:7]} of {v['date'][:10]})" if v else ""
+    print(f"jobhunt web app running at {local_url}{ver}")
     public = host not in ("127.0.0.1", "localhost", "::1")
     if public:
         lan = _lan_ip()
