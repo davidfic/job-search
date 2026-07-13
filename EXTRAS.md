@@ -121,7 +121,9 @@ python jobhunt.py mark <id> interested
 python jobhunt.py report            # static HTML report
 ```
 
-**How in-app updates work:** the start files run `_boot.py`, a small stdlib-only
+**How in-app updates work:** the open page re-checks every 5 minutes (server-side
+GitHub cache: 4 minutes), so a push shows up in a running app within ~10 minutes
+with no refresh. The start files run `_boot.py`, a small stdlib-only
 supervisor that installs `requirements.txt` when it changes, restarts the server
 when it exits with code 42 (the "I just updated myself" signal), and — right
 after an update — health-checks the new server, restoring `.backup/` and
