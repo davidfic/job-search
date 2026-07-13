@@ -764,13 +764,47 @@ async function showUpdateResult() {
   } catch { /* endpoint may not exist mid-migration */ }
 }
 
-async function checkForUpdate() {
+// Always-visible version line at the bottom of the sidebar: shows the installed
+// version, doubles as a manual "check again", and links to the update when one
+// is ready. The topbar button is the loud indicator; this is the quiet one.
+function renderVersionLine(info) {
+  const el = $("#versionLine");
+  el.hidden = false;
+  if (info.git) {
+    el.textContent = "dev version (git checkout) — update with git pull";
+    return;
+  }
+  const cur = escapeHtml(fmtVersion(info.current));
+  if (info.available) {
+    el.innerHTML = `Version ${cur} · <button class="linklike vl-new" type="button">` +
+      `⬆ a new version is ready — install it</button>`;
+    el.querySelector("button").addEventListener("click", () => openUpdateModal(info));
+  } else {
+    el.innerHTML = `Version ${cur} · ✓ up to date · ` +
+      `<button class="linklike" type="button">check again</button>`;
+    el.querySelector("button").addEventListener("click", () => {
+      toast("Checking for updates…");
+      checkForUpdate(true);
+    });
+  }
+}
+
+async function checkForUpdate(force = false) {
   let info;
-  try { info = await api.get("/api/update/check"); } catch { return; }
-  if (!info.available) return;
+  try { info = await api.get("/api/update/check" + (force ? "?force=1" : "")); }
+  catch (e) {
+    if (force) toast("Couldn't check for updates: " + e.message, 5000);
+    return;
+  }
+  renderVersionLine(info);
   const btn = $("#updateBtn");
-  btn.hidden = false;
+  btn.hidden = !info.available;
+  if (!info.available) {
+    if (force) toast("✓ You're on the latest version");
+    return;
+  }
   btn.onclick = () => openUpdateModal(info);
+  if (force) openUpdateModal(info);
 }
 
 function openUpdateModal(info) {

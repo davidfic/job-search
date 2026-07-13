@@ -13,6 +13,9 @@
 }
 
 * { box-sizing: border-box; }
+/* the hidden attribute must always win, even on elements whose class sets a
+   display (e.g. .btn's inline-flex) -- without this, "hidden" buttons render */
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0;
@@ -110,6 +113,9 @@ body.col-resizing iframe, body.col-resizing #map { pointer-events: none; }
 .field > span { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .25rem; }
 .field select, .field input[type=range] { width: 100%; }
 .field select { padding: .4rem; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.version-line { font-size: .74rem; color: var(--muted); text-align: center;
+  margin: .2rem 0 .8rem; }
+.version-line .vl-new { color: #059669; font-weight: 600; }
 .update-btn { background: #059669; color: #fff; border-color: #059669; font-weight: 600; }
 .update-btn:hover { background: #047857; }
 .update-vers { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem;
@@ -247,9 +253,7 @@ body.col-resizing iframe, body.col-resizing #map { pointer-events: none; }
   position: fixed; inset: 0; background: rgba(15,18,24,.45); z-index: 3000;
   display: grid; place-items: center; padding: 1rem;
 }
-/* the [hidden] attribute must win over the display:grid above, or the backdrop
-   covers the page and swallows every click */
-.overlay[hidden] { display: none; }
+/* ([hidden] beating display:grid is handled by the global [hidden] rule) */
 .modal {
   background: #fff; border-radius: 14px; width: min(640px, 100%);
   max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.25);
