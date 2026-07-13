@@ -38,7 +38,10 @@ MANIFEST_PATH = os.path.join(HERE, "update_manifest.json")
 BACKUP_DIR = os.path.join(HERE, ".backup")
 PENDING_PATH = os.path.join(HERE, ".update_pending.json")
 
-CHECK_INTERVAL = 12 * 3600          # in-memory cache; a fresh check per day-ish
+# In-memory cache for the GitHub check. The page polls every 5 minutes, so a
+# ~4-minute TTL means a push shows up in the open app within about 10 minutes
+# while staying far under GitHub's 60 unauthenticated API calls per hour.
+CHECK_INTERVAL = 4 * 60
 RESTART_EXIT_CODE = 42              # _boot.py relaunches the server on this code
 
 # Paths that may never be written by an update, no matter what the downloaded

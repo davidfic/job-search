@@ -995,7 +995,13 @@ async function init() {
   } else if (!s.adzuna_ready) {
     toast("Tip: add free Adzuna keys to the config for local distance filtering", 5000);
   }
-  if (!DEMO) { showUpdateResult(); checkForUpdate(); }
+  if (!DEMO) {
+    showUpdateResult();
+    checkForUpdate();
+    // keep looking while the app sits open, so a new version shows up
+    // without needing a page refresh
+    setInterval(checkForUpdate, 5 * 60 * 1000);
+  }
   await loadJobs();
   setTimeout(() => state.map.invalidateSize(), 200);
 }
