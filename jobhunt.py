@@ -277,6 +277,13 @@ _JOB_EXTRA_COLUMNS = [
     ("contact_kind", "TEXT"),
     ("contact_fetched_at", "TEXT"),
     ("pay", "TEXT"),
+    # resolved coordinates (see geo_lookup.py); geo_checked_at NULL = not yet swept
+    ("lat", "REAL"),
+    ("lng", "REAL"),
+    ("geo_matched", "TEXT"),
+    ("geo_source", "TEXT"),
+    ("geo_remote", "INTEGER"),
+    ("geo_checked_at", "TEXT"),
 ]
 
 
@@ -305,6 +312,16 @@ def db():
     for name, ctype in _JOB_EXTRA_COLUMNS:
         if name not in have:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {ctype}")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS geo_cache (
+            query       TEXT PRIMARY KEY,
+            lat         REAL,
+            lng         REAL,
+            matched     TEXT,
+            found       INTEGER,
+            checked_at  TEXT
+        )
+    """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS applications (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -767,6 +784,16 @@ def fetch_jobs(conn, cfg, on_progress=None):
     except Exception as e:  # noqa: BLE001 -- enrichment must never break a fetch
         if on_progress:
             on_progress("craigslist", f"body pass skipped ({e})")
+
+    # Third pass: place the new rows on the map (town table first, then the
+    # online geocoder) so the radius filter knows how far away each one is.
+    try:
+        import geo_lookup
+        geo_lookup.backfill(conn, cfg,
+                            on_progress and (lambda msg: on_progress("geo", msg)))
+    except Exception as e:  # noqa: BLE001 -- geocoding must never break a fetch
+        if on_progress:
+            on_progress("geo", f"lookup pass skipped ({e})")
 
     fresh_top.sort(reverse=True)
     return {"total_new": total_new, "per_source": per_source, "top": fresh_top[:10]}

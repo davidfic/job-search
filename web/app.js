@@ -142,10 +142,12 @@ function milesBetween(lat1, lng1, lat2, lng2) {
   return 2 * 3958.8 * Math.asin(Math.sqrt(a));
 }
 
-// Jobs we couldn't geocode stay visible -- the filter only drops listings we
-// know are outside the circle.
+// With the filter on: remote jobs stay, placed jobs must be inside the circle,
+// and jobs with no known location are hidden (the backend resolves town names
+// and even company addresses, so "unknown" now genuinely means unknowable).
 function withinRadius(job) {
-  if (!state.radius.on || job.lat == null) return true;
+  if (!state.radius.on || job.remote) return true;
+  if (job.lat == null) return false;
   return milesBetween(state.home.lat, state.home.lng, job.lat, job.lng) <= state.radius.miles;
 }
 
@@ -302,15 +304,18 @@ function renderJobs(data) {
   state.markers.clear();
 
   const jobs = data.jobs.filter(withinRadius);
-  const outside = data.jobs.length - jobs.length;
+  const hiddenJobs = data.jobs.filter((j) => !withinRadius(j));
+  const unknown = hiddenJobs.filter((j) => j.lat == null).length;
+  const outside = hiddenJobs.length - unknown;
   $("#resultCount").textContent = `${jobs.length} listing${jobs.length === 1 ? "" : "s"} shown` +
-    (outside ? ` · ${outside} outside radius` : "");
+    (outside ? ` · ${outside} outside radius` : "") +
+    (unknown ? ` · ${unknown} location unknown` : "");
   renderCounts(data.counts);
   renderTabs(data.counts);
 
   if (!jobs.length) {
-    if (outside) {
-      list.innerHTML = `<div class="empty">All ${outside} listing${outside === 1 ? " is" : "s here are"} outside your ${state.radius.miles} mi radius.<br>Widen the radius or turn it off to see them.</div>`;
+    if (hiddenJobs.length) {
+      list.innerHTML = `<div class="empty">All ${hiddenJobs.length} listing${hiddenJobs.length === 1 ? " here is" : "s here are"} outside your ${state.radius.miles} mi radius or in an unknown location.<br>Widen the radius or turn it off to see them.</div>`;
       return;
     }
     const v = VIEWS.find((x) => x.key === state.view);

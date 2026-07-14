@@ -47,6 +47,23 @@ of `jobhunt_config.json`.
 
 ---
 
+## How jobs get placed on the map
+
+Each listing is placed once, at fetch time, trying cheap and local before slow
+and remote: the Davis-area gazetteer, then a built-in table of all 351
+Massachusetts municipalities, then OpenStreetMap's free Nominatim geocoder for
+street addresses — and as a last resort the **company name** is looked up near
+home (for chains, the nearest branch). Results are cached in the database, and
+online lookups are throttled to one per second. To keep everything strictly
+offline, add `"geocoding": {"online": false}` to `jobhunt_config.json` — town
+names still resolve from the built-in table.
+
+With the **radius filter on**, listings whose location can't be determined at
+all are hidden (remote jobs stay); the count line under the slider says how
+many were hidden and why.
+
+---
+
 ## Change the area
 
 Everything about location lives in `jobhunt_config.json` under `location_filter`

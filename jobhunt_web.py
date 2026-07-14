@@ -172,16 +172,26 @@ def build_jobs(view=None, min_score=None):
 
     jobs = []
     for r in shown:
-        geo = geo_data.resolve(r["location"], r["title"])
+        if r["geo_checked_at"]:
+            # placed (or confirmed unplaceable) by geo_lookup at fetch/backfill
+            lat, lng = r["lat"], r["lng"]
+            matched, remote = r["geo_matched"], bool(r["geo_remote"])
+        else:
+            # not swept yet -- offline lookups only, so the list never blocks
+            geo = (geo_data.resolve(r["location"], r["title"])
+                   or geo_data.town_lookup(r["location"], r["title"]))
+            lat, lng = geo and geo["lat"], geo and geo["lng"]
+            matched = geo["matched"] if geo else None
+            remote = bool(geo and geo["remote"])
         jobs.append({
             "id": r["id"], "source": r["source"], "title": r["title"] or "",
             "company": r["company"] or "", "location": r["location"] or "",
             "url": r["url"] or "", "summary": (r["summary"] or "")[:400],
             "posted": r["posted"] or "", "first_seen": r["first_seen"] or "",
             "score": r["score"], "status": r["status"], "note": r["note"] or "",
-            "lat": geo and geo["lat"], "lng": geo and geo["lng"],
-            "geo": geo["matched"] if geo else None,
-            "remote": bool(geo and geo["remote"]),
+            "lat": lat, "lng": lng,
+            "geo": matched,
+            "remote": remote,
             "contact_kind": r["contact_kind"],
             "pay": r["pay"] or "",
             "applied_at": r["applied_at"] or "",
@@ -630,8 +640,23 @@ def _lan_ip():
         s.close()
 
 
+def _geo_backfill_async():
+    """Sweep un-placed jobs in the background (own db connection -- sqlite
+    objects aren't shared across threads). Rate-limited inside geo_lookup."""
+    def run():
+        try:
+            import geo_lookup
+            conn = jobhunt.db()
+            geo_lookup.backfill(conn, jobhunt.load_config(merge_excludes=False))
+            conn.close()
+        except Exception:                        # noqa: BLE001 -- best effort
+            pass
+    threading.Thread(target=run, daemon=True).start()
+
+
 def serve(host="127.0.0.1", port=8765, open_browser=True):
     httpd = ThreadingHTTPServer((host, port), Handler)
+    _geo_backfill_async()
     # The host itself always reaches the app on localhost; open the browser there
     # even when bound to 0.0.0.0 (a browser can't connect *to* 0.0.0.0 on Windows).
     local_url = f"http://127.0.0.1:{port}/"
