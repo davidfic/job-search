@@ -17,6 +17,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import threading
 import time
 import zipfile
@@ -62,7 +63,10 @@ def is_git_checkout():
 
 
 def current_version():
-    """The installed version stamp, or None (fresh install from a zip)."""
+    """The installed version: HEAD in a git checkout, else the version.json
+    stamp written by the zip updater, else None (fresh zip install)."""
+    if is_git_checkout():
+        return _git_version()
     try:
         with open(VERSION_PATH, encoding="utf-8") as f:
             v = json.load(f)
@@ -104,28 +108,48 @@ def _local_manifest_paths():
         return None
 
 
-def _summaries(base, head):
-    """First lines of the commits between the installed and latest version --
-    shown to the user as what's-new notes. Best effort; [] on any problem."""
+def _compare(base, head):
+    """GitHub compare API result between two commits, or None on any problem
+    (including base commits GitHub doesn't know, e.g. unpushed local work)."""
     try:
         r = requests.get(API_COMPARE.format(base=base, head=head),
                          headers=UA, timeout=15)
         r.raise_for_status()
-        commits = r.json().get("commits") or []
-        return [c["commit"]["message"].split("\n", 1)[0]
-                for c in reversed(commits)][:20]
+        return r.json()
     except Exception:                                        # noqa: BLE001
-        return []
+        return None
+
+
+def _notes(cmp):
+    commits = (cmp or {}).get("commits") or []
+    return [c["commit"]["message"].split("\n", 1)[0]
+            for c in reversed(commits)][:20]
+
+
+def _git(*args):
+    out = subprocess.run(["git", "-C", HERE] + list(args),
+                         capture_output=True, text=True, timeout=60)
+    if out.returncode != 0:
+        raise ValueError((out.stderr or out.stdout).strip() or "git failed")
+    return out.stdout.strip()
+
+
+def _git_version():
+    """Version of a git checkout = its HEAD commit."""
+    try:
+        return {"sha": _git("rev-parse", "HEAD"),
+                "date": _git("show", "-s", "--format=%cI", "HEAD")}
+    except Exception:                                        # noqa: BLE001
+        return None
 
 
 def check(force=False):
     """Compare the installed version against the latest commit on main."""
-    if is_git_checkout():
-        return {"git": True, "available": False, "current": current_version()}
     now = time.time()
     with _LOCK:
         if not force and _cache["result"] and now - _cache["at"] < CHECK_INTERVAL:
             return _cache["result"]
+    git = is_git_checkout()
     r = requests.get(API_LATEST, headers=UA, timeout=15)
     r.raise_for_status()
     j = r.json()
@@ -133,10 +157,20 @@ def check(force=False):
               "date": (j.get("commit", {}).get("committer") or {}).get("date", ""),
               "message": j.get("commit", {}).get("message", "").split("\n", 1)[0]}
     cur = current_version()
-    available = not cur or cur["sha"] != latest["sha"]
-    notes = _summaries(cur["sha"], latest["sha"]) if (cur and available) else []
+    if git:
+        # A checkout is "behind" only if GitHub can walk from HEAD to latest --
+        # local unpushed commits make the compare fail, which correctly reads
+        # as "nothing to offer" (never suggest pulling backwards).
+        cmp = (_compare(cur["sha"], latest["sha"])
+               if cur and cur["sha"] != latest["sha"] else None)
+        available = bool((cmp or {}).get("commits"))
+        notes = _notes(cmp)
+    else:
+        available = not cur or cur["sha"] != latest["sha"]
+        notes = _notes(_compare(cur["sha"], latest["sha"])) if (cur and available) else []
     result = {"current": cur, "latest": latest, "available": available,
-              "notes": notes, "first_update": available and not cur}
+              "notes": notes, "first_update": available and not cur and not git,
+              "git": git}
     with _LOCK:
         _cache.update(at=now, result=result)
     return result
@@ -212,12 +246,29 @@ def apply_update():
     the backup is restored immediately so the install is never left mixed.
     The caller decides whether to restart (supervised) or ask the user to.
     """
-    if is_git_checkout():
-        raise ValueError("This is a git checkout -- update with git pull instead.")
     info = check(force=True)
     if not info["available"]:
         raise ValueError("Already up to date.")
     latest = info["latest"]
+
+    if is_git_checkout():
+        # Never zip-overwrite a working tree: a checkout updates through git,
+        # fast-forward only, and refuses to touch uncommitted work. There is
+        # no .backup/ rollback here -- git itself is the safety net.
+        if _git("status", "--porcelain"):
+            raise ValueError("This checkout has uncommitted changes -- "
+                             "commit or stash them, then update.")
+        _git("pull", "--ff-only", "origin", BRANCH)
+        # No pending marker in git mode (no zip rollback), so write the
+        # post-restart "updated" toast note directly.
+        with open(os.path.join(HERE, ".update_result.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": "updated",
+                       "from": info["current"] and info["current"]["sha"],
+                       "to": latest["sha"], "detail": "git pull"}, f)
+        with _LOCK:
+            _cache.update(at=0.0, result=None)
+        return {"ok": True, "to": latest["sha"], "date": latest["date"],
+                "git": True, "files": None}
 
     r = requests.get(ZIP_URL, headers=UA, timeout=120)
     r.raise_for_status()

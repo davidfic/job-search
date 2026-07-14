@@ -775,11 +775,7 @@ async function showUpdateResult() {
 function renderVersionLine(info) {
   const el = $("#versionLine");
   el.hidden = false;
-  if (info.git) {
-    el.textContent = "dev version (git checkout) — update with git pull";
-    return;
-  }
-  const cur = escapeHtml(fmtVersion(info.current));
+  const cur = escapeHtml(fmtVersion(info.current)) + (info.git ? " · git" : "");
   if (info.available) {
     el.innerHTML = `Version ${cur} · <button class="linklike vl-new" type="button">` +
       `⬆ a new version is ready — install it</button>`;
@@ -830,7 +826,9 @@ function openUpdateModal(info) {
       <button class="btn primary" id="updNow">Update now</button>
       <button class="btn" id="updLater">Not now</button>
     </div>
-    <div class="muted-note">Your saved jobs, settings, resume, and email login are never touched by an update.</div>`;
+    <div class="muted-note">${info.git
+      ? "Git checkout — Update now runs <b>git pull --ff-only</b> and restarts. Uncommitted local changes will block it."
+      : "Your saved jobs, settings, resume, and email login are never touched by an update."}</div>`;
   openModal(modalShell("Update jobhunt", "", body));
   $("#mClose").addEventListener("click", closeModal);
   $("#updLater").addEventListener("click", closeModal);
