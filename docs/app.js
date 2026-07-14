@@ -230,6 +230,14 @@ function wireGutter() {
 // --------------------------------------------------------------------------- //
 // rendering: jobs
 // --------------------------------------------------------------------------- //
+// "today" / "yesterday" / "3 days ago" from an ISO timestamp, or "" if absent.
+function agoLabel(iso) {
+  if (!iso) return "";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (!(days >= 0)) return "";
+  return days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+}
+
 function jobCard(job) {
   const el = document.createElement("article");
   el.className = "job";
@@ -239,6 +247,22 @@ function jobCard(job) {
   if (job.lat != null) geoTag = `<span class="geo-tag">📍 ${job.geo}</span>`;
   else if (job.remote) geoTag = `<span class="geo-tag">🖥️ remote</span>`;
   else geoTag = `<span class="geo-tag none">📍 location unknown</span>`;
+
+  // When first seen, and whether it keeps getting reposted (a live signal that
+  // the opening is still actively hiring).
+  const seen = agoLabel(job.first_seen);
+  const seenTag = seen ? `<span class="age-tag" title="first seen ${escapeAttr(job.first_seen)}">🕑 ${seen}</span>` : "";
+  const repostTag = job.repost_count > 0
+    ? `<span class="repost-tag" title="posted again ${job.repost_count} more time${job.repost_count === 1 ? "" : "s"} since — still hiring">🔁 reposted ${job.repost_count}×</span>`
+    : "";
+
+  // Why this score: the keyword/location matches that added up to it.
+  const reasons = (job.reasons || []).filter((r) => r.pts);
+  const reasonsRow = reasons.length
+    ? `<div class="reasons">${reasons.map((r) =>
+        `<span class="why ${r.pts > 0 ? "up" : "down"}">${r.pts > 0 ? "+" : ""}${r.pts} ${escapeHtml(r.label)}</span>`
+      ).join("")}</div>`
+    : "";
 
   // Applied cards show how long ago; after a quiet stretch, nudge a follow-up.
   let appliedLine = "";
@@ -254,11 +278,12 @@ function jobCard(job) {
   }
 
   el.innerHTML = `
-    <div class="score" style="background:${scoreColor(job.score)}">${job.score}</div>
+    <div class="score" style="background:${scoreColor(job.score)}" title="fit score — higher is a better match" aria-label="fit score ${job.score}">${job.score}</div>
     <div class="body">
       <a class="title" href="${escapeAttr(job.url)}" target="_blank" rel="noopener">${escapeHtml(job.title)}</a>
       <div class="meta">${escapeHtml([job.company, job.location, job.source].filter(Boolean).join(" · "))}</div>
       <div class="summary">${escapeHtml(job.summary)}</div>
+      ${reasonsRow}
       <div class="row">
         <button class="btn intg ${job.status === "interested" ? "on" : ""}" type="button">★ Interested</button>
         <button class="btn notg ${job.status === "rejected" ? "on" : ""}" type="button">✕ Not interested</button>
@@ -266,6 +291,8 @@ function jobCard(job) {
         ${contactTag(job.contact_kind)}
         ${job.pay ? `<span class="pay-tag">💰 ${escapeHtml(job.pay)}</span>` : ""}
         ${geoTag}
+        ${seenTag}
+        ${repostTag}
       </div>
       ${appliedLine}
     </div>`;
@@ -294,6 +321,44 @@ function focusJob(id) {
   state.active = id;
   const m = state.markers.get(id);
   if (m) { state.map.flyTo(m.getLatLng(), Math.max(state.map.getZoom(), 14), { duration: .4 }); m.openPopup(); }
+}
+
+// --------------------------------------------------------------------------- //
+// keyboard triage: fly through the list without the mouse
+// --------------------------------------------------------------------------- //
+function currentJob() {
+  const jobs = (state.jobsData && state.jobsData.jobs) || [];
+  return jobs.find((j) => j.id === state.active) || null;
+}
+
+function moveFocus(delta) {
+  const cards = [...document.querySelectorAll(".job")];
+  if (!cards.length) return;
+  let idx = cards.findIndex((c) => c.dataset.id === state.active);
+  idx = idx < 0 ? (delta > 0 ? 0 : cards.length - 1)
+                : Math.max(0, Math.min(cards.length - 1, idx + delta));
+  focusJob(cards[idx].dataset.id);
+}
+
+function wireKeyboard() {
+  document.addEventListener("keydown", (e) => {
+    // never hijack typing, shortcuts, or keys while a modal is open
+    const t = e.target;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+    if (!$("#overlay").hidden) return;
+
+    const key = e.key.toLowerCase();
+    if (key === "j" || key === "arrowdown") { e.preventDefault(); return moveFocus(1); }
+    if (key === "k" || key === "arrowup") { e.preventDefault(); return moveFocus(-1); }
+
+    const job = currentJob();
+    if (!job) { if (["i", "x", "a", "o"].includes(key)) moveFocus(1); return; }
+    if (key === "i") { e.preventDefault(); setStatus(job, job.status === "interested" ? "new" : "interested", true); }
+    else if (key === "x") { e.preventDefault(); setStatus(job, job.status === "rejected" ? "new" : "rejected", true); }
+    else if (key === "a") { e.preventDefault(); openComposer(job.id); }
+    else if (key === "o") { e.preventDefault(); if (job.url) window.open(job.url, "_blank", "noopener"); }
+  });
 }
 
 function renderJobs(data) {
@@ -367,13 +432,24 @@ function renderTabs(counts) {
     t.addEventListener("click", () => { state.view = t.dataset.view; loadJobs(); }));
 }
 
-async function setStatus(job, status) {
+async function setStatus(job, status, advance = false) {
+  // When advancing (keyboard triage), remember where this card sat so focus can
+  // land on whatever slides into its place after the list reloads.
+  let idx = -1;
+  if (advance) {
+    const cards = [...document.querySelectorAll(".job")];
+    idx = cards.findIndex((c) => c.dataset.id === job.id);
+  }
   try {
     await api.post("/api/mark", { id: job.id, status });
     const msg = { new: "Moved back to review", interested: "★ Added to Interested",
                   rejected: "Moved to Not interested" }[status] || ("Marked " + status);
     toast(msg);
-    loadJobs();
+    await loadJobs();
+    if (advance && idx >= 0) {
+      const cards = [...document.querySelectorAll(".job")];
+      if (cards.length) focusJob(cards[Math.min(idx, cards.length - 1)].dataset.id);
+    }
   } catch (e) { toast("Error: " + e.message); }
 }
 
@@ -919,23 +995,48 @@ function wireKeywordForms() {
 
 async function doFetch() {
   const btn = $("#fetchBtn");
+  const label = btn.querySelector(".btn-label");
   btn.disabled = true;
   btn.querySelector(".spinner").hidden = false;
-  btn.querySelector(".btn-label").textContent = "Fetching…";
+  label.textContent = "Fetching…";
+
+  // Fetch runs in the background now; the demo has no backend to poll, so it
+  // keeps the old one-shot call (which the demo rejects politely).
+  if (DEMO) {
+    try { await api.post("/api/fetch", {}); }
+    catch (e) { toast(e.message); }
+    finally {
+      btn.disabled = false; btn.querySelector(".spinner").hidden = true;
+      label.textContent = "Fetch new jobs";
+    }
+    return;
+  }
+
   try {
-    const r = await api.post("/api/fetch", {});
-    const errs = Object.entries(r.per_source).filter(([, v]) => typeof v === "string");
-    toast(`${r.total_new} new listing${r.total_new === 1 ? "" : "s"}` +
-          (errs.length ? ` (${errs.map(([k]) => k).join(", ")} had issues)` : ""));
-    // Jump straight to the freshly fetched batch so they're easy to find.
-    if (r.total_new > 0) state.view = "latest";
-    await loadJobs();
+    await api.post("/api/fetch", {});
+    // Poll progress and show the latest step on the button until it finishes.
+    while (true) {
+      await new Promise((r) => setTimeout(r, 1000));
+      let st;
+      try { st = await api.get("/api/fetch/status"); } catch { continue; }
+      const last = st.lines && st.lines[st.lines.length - 1];
+      if (last) label.textContent = last.length > 22 ? last.slice(0, 21) + "…" : last;
+      if (st.running) continue;
+      if (st.error) { toast("Fetch failed: " + st.error); break; }
+      const s = st.summary || { total_new: 0, per_source: {} };
+      const errs = Object.entries(s.per_source || {}).filter(([, v]) => typeof v === "string");
+      toast(`${s.total_new} new listing${s.total_new === 1 ? "" : "s"}` +
+            (errs.length ? ` (${errs.map(([k]) => k).join(", ")} had issues)` : ""));
+      if (s.total_new > 0) state.view = "latest";
+      await loadJobs();
+      break;
+    }
   } catch (e) {
     toast("Fetch failed: " + e.message);
   } finally {
     btn.disabled = false;
     btn.querySelector(".spinner").hidden = true;
-    btn.querySelector(".btn-label").textContent = "Fetch new jobs";
+    label.textContent = "Fetch new jobs";
   }
 }
 
@@ -952,6 +1053,7 @@ async function init() {
 
   state.map = initMap(s.home, s.transit);
   wireGutter();
+  wireKeyboard();
   renderKeywords(s);
   wireKeywordForms();
 

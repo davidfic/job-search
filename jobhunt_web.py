@@ -9,7 +9,8 @@ sync. Bind defaults to 127.0.0.1 -- this is a personal tool, not a public server
 API:
   GET  /api/state                       keyword lists, transit lines, home, meta
   GET  /api/jobs?status=&min_score=     scored jobs, each with resolved geo
-  POST /api/fetch                        pull all sources, store new matches
+  POST /api/fetch                        start a background fetch (returns at once)
+  GET  /api/fetch/status                 live progress lines + summary when done
   POST /api/mark   {id,status,note}      set a job's status
   POST /api/keywords {list,action,term,weight}   edit positive/negative/exclude
   GET/POST /api/resume                   upload / inspect / delete the resume
@@ -140,6 +141,7 @@ def _excluded(row, terms):
 def build_jobs(view=None, min_score=None):
     cfg = jobhunt.load_config()
     prof = cfg["profile"]
+    locf = cfg.get("location_filter")
     if min_score is None:
         min_score = prof.get("min_display_score", 0)
     excludes = [t.lower() for t in prof.get("exclude", [])]
@@ -195,16 +197,50 @@ def build_jobs(view=None, min_score=None):
             "contact_kind": r["contact_kind"],
             "pay": r["pay"] or "",
             "applied_at": r["applied_at"] or "",
+            "last_seen": r["last_seen"] or "",
+            "repost_count": r["repost_count"] or 0,
+            "reasons": jobhunt.score_reasons(dict(r), prof, locf)[:5],
         })
     return {"jobs": jobs, "counts": counts}
 
 
-def do_fetch():
-    cfg = jobhunt.load_config()
-    conn = jobhunt.db()
-    summary = jobhunt.fetch_jobs(conn, cfg)
-    conn.close()
-    return summary
+# Fetching pulls several sources and reads listing pages, so it runs 1-2
+# minutes. Rather than block the request (a silent spinner reads as "frozen" to
+# an impatient user), it runs in a background thread that appends progress lines
+# the page polls via /api/fetch/status.
+_fetch = {"running": False, "lines": [], "summary": None, "error": None}
+_fetch_lock = threading.Lock()
+
+
+def start_fetch():
+    with _fetch_lock:
+        if _fetch["running"]:
+            return {"running": True, "already": True}
+        _fetch.update(running=True, lines=["Starting…"], summary=None, error=None)
+
+    def run():
+        def note(name, msg):
+            with _fetch_lock:
+                _fetch["lines"].append(f"{name}: {msg}")
+        try:
+            cfg = jobhunt.load_config()
+            conn = jobhunt.db()
+            summary = jobhunt.fetch_jobs(conn, cfg, on_progress=note)
+            conn.close()
+            with _fetch_lock:
+                _fetch.update(running=False, summary=summary)
+        except Exception as e:                   # noqa: BLE001 -- report, don't crash
+            with _fetch_lock:
+                _fetch.update(running=False, error=str(e))
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"running": True}
+
+
+def fetch_status():
+    with _fetch_lock:
+        return {"running": _fetch["running"], "lines": list(_fetch["lines"]),
+                "summary": _fetch["summary"], "error": _fetch["error"]}
 
 
 def do_mark(jid, status, note):
@@ -520,6 +556,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(update_util.check(force=force))
             if path == "/api/update/status":
                 return self._json(update_status())
+            if path == "/api/fetch/status":
+                return self._json(fetch_status())
             return self._serve_static(path)
         except KeyError as e:
             return self._json({"error": f"no job {e}"}, 404)
@@ -545,8 +583,7 @@ class Handler(BaseHTTPRequestHandler):
                     resume_util.delete_resume()
                 return self._json({"resume": None, "suggestions": []})
             if path == "/api/fetch":
-                with _LOCK:
-                    return self._json(do_fetch())
+                return self._json(start_fetch())
             if path == "/api/contact":
                 return self._json(do_contact(self._body().get("id")))
             if path == "/api/apply/send":
@@ -647,7 +684,10 @@ def _geo_backfill_async():
         try:
             import geo_lookup
             conn = jobhunt.db()
-            geo_lookup.backfill(conn, jobhunt.load_config(merge_excludes=False))
+            cfg = jobhunt.load_config(merge_excludes=False)
+            jobhunt.collapse_duplicates(conn)    # clean reposts from past fetches
+            jobhunt.archive_stale(conn, cfg.get("profile", {}).get("stale_days", 21))
+            geo_lookup.backfill(conn, cfg)
             conn.close()
         except Exception:                        # noqa: BLE001 -- best effort
             pass

@@ -86,6 +86,9 @@ DEFAULT_CONFIG = {
         "title_boost": 3,
         # listings scoring below this are hidden from list/report (kept in db)
         "min_display_score": 1,
+        # untouched 'new' listings older than this auto-archive out of the review
+        # pile (summer postings go stale fast). 0 disables. Kept in the db.
+        "stale_days": 21,
     },
 
     # Keep jobs that are walkable from home or a reasonable transit ride; drop
@@ -284,6 +287,10 @@ _JOB_EXTRA_COLUMNS = [
     ("geo_source", "TEXT"),
     ("geo_remote", "INTEGER"),
     ("geo_checked_at", "TEXT"),
+    # repost dedup (see fingerprint()): content id, times re-seen, last re-seen
+    ("fingerprint", "TEXT"),
+    ("repost_count", "INTEGER"),
+    ("last_seen", "TEXT"),
 ]
 
 
@@ -336,12 +343,38 @@ def db():
             created_at  TEXT
         )
     """)
+    # Backfill fingerprints for rows that predate the column, then index them
+    # so repost lookups at fetch time stay cheap.
+    if "fingerprint" not in have:
+        for r in conn.execute("SELECT id, title, company, location FROM jobs").fetchall():
+            conn.execute("UPDATE jobs SET fingerprint=? WHERE id=?",
+                         (fingerprint(r["title"], r["company"], r["location"]), r["id"]))
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint ON jobs(fingerprint)")
     conn.commit()
     return conn
 
 
 def job_id(url):
     return hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+
+
+# Craigslist (and others) repost the same opening under a fresh URL, so the
+# URL hash alone treats each repost as a brand-new job -- the user re-triages
+# the same listing again and again. A content fingerprint (normalized
+# title+company+location) collapses those into one row, and how many times a
+# job reposts is itself signal: a repeatedly-reposted opening is still hiring.
+_FINGERPRINT_STRIP = re.compile(r"[^a-z0-9]+")
+
+
+def _norm(s):
+    return _FINGERPRINT_STRIP.sub(" ", (s or "").lower()).strip()
+
+
+def fingerprint(title, company, location):
+    """Stable id for 'the same job' across reposts. Location is included so two
+    genuinely different shops with a generic title ('Line Cook') don't merge."""
+    key = "|".join((_norm(title), _norm(company), _norm(location)))
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
 
 
 # --------------------------------------------------------------------------- #
@@ -406,6 +439,42 @@ def score_job(job, profile, locf=None):
         if has_term(term.lower(), hay):
             score += pts  # pts is already negative
     return score
+
+
+def score_reasons(job, profile, locf=None):
+    """Explain a score: the list of {label, pts} that added up to it, so the
+    UI can show *why* a listing ranked where it did. Mirrors score_job's
+    matching. Sorted by impact (biggest swings first)."""
+    title = (job.get("title") or "").lower()
+    hay = " ".join(str(job.get(k) or "") for k in
+                   ("title", "company", "location", "summary")).lower()
+    loc_hay = " ".join(str(job.get(k) or "") for k in ("location", "title")).lower()
+    reasons = []
+
+    if locf and locf.get("enabled"):
+        walk = [w.lower() for w in locf.get("walkable", [])]
+        if any(has_term(w, loc_hay) for w in walk):
+            reasons.append({"label": "walkable", "pts": locf.get("walkable_bonus", 8)})
+        else:
+            allow = [a.lower() for a in locf.get("allow", [])]
+            is_allow = any(has_term(a, loc_hay) for a in allow)
+            if locf.get("remote_ok") and has_term("remote", loc_hay):
+                is_allow = True
+            if is_allow:
+                reasons.append({"label": "on transit", "pts": locf.get("transit_bonus", 3)})
+
+    boost = profile.get("title_boost", 0)
+    for term, pts in profile.get("keywords_positive", {}).items():
+        t = term.lower()
+        if has_term(t, hay):
+            p = pts + (boost if has_term(t, title) else 0)
+            reasons.append({"label": term, "pts": p})
+    for term, pts in profile.get("keywords_negative", {}).items():
+        if has_term(term.lower(), hay):
+            reasons.append({"label": term, "pts": pts})
+
+    reasons.sort(key=lambda r: abs(r["pts"]), reverse=True)
+    return reasons
 
 
 # --------------------------------------------------------------------------- #
@@ -725,6 +794,50 @@ def cmd_init(_):
     print("Edit it: set your cities, queries, and keyword weights, then run 'fetch'.")
 
 
+def collapse_duplicates(conn):
+    """Fold existing repost duplicates into a single row. Only merges untouched
+    listings -- 'new' status with no logged application -- so anything the user
+    has acted on is never disturbed. Keeps the earliest-seen row and records how
+    many copies it stood in for. Returns the number of rows removed."""
+    import itertools
+    rows = conn.execute(
+        "SELECT id, fingerprint, first_seen FROM jobs "
+        "WHERE status='new' AND fingerprint IS NOT NULL "
+        "AND id NOT IN (SELECT DISTINCT job_id FROM applications "
+        "               WHERE job_id IS NOT NULL) "
+        "ORDER BY fingerprint, first_seen").fetchall()
+    removed = 0
+    for fp, grp in itertools.groupby(rows, key=lambda r: r["fingerprint"]):
+        grp = list(grp)
+        if len(grp) < 2:
+            continue
+        primary, extra = grp[0], grp[1:]        # grp[0] = earliest first_seen
+        conn.execute(
+            "UPDATE jobs SET repost_count=COALESCE(repost_count,0)+?, last_seen=? "
+            "WHERE id=?", (len(extra), grp[-1]["first_seen"], primary["id"]))
+        conn.executemany("DELETE FROM jobs WHERE id=?",
+                         [(r["id"],) for r in extra])
+        removed += len(extra)
+    conn.commit()
+    return removed
+
+
+def archive_stale(conn, days):
+    """Archive untouched 'new' listings first seen more than `days` ago -- a
+    3-week-old summer posting is almost always filled. Touched rows (interested/
+    applied/rejected) are left alone; archived rows stay in the db. Uses
+    last_seen when present (a reposted job is fresh) else first_seen. Returns
+    the count archived. days<=0 disables."""
+    if not days or days <= 0:
+        return 0
+    cutoff = (dt.datetime.now() - dt.timedelta(days=days)).isoformat(timespec="seconds")
+    cur = conn.execute(
+        "UPDATE jobs SET status='archived' "
+        "WHERE status='new' AND COALESCE(last_seen, first_seen) < ?", (cutoff,))
+    conn.commit()
+    return cur.rowcount
+
+
 def fetch_jobs(conn, cfg, on_progress=None):
     """Pull every enabled source, store new scored matches, and return a summary
     dict: {total_new, per_source: {name: count|error}, top: [(score,source,title,id)]}.
@@ -760,14 +873,25 @@ def fetch_jobs(conn, cfg, on_progress=None):
             sc = score_job(j, profile, locf)
             if sc is None:  # failed exclude / location / must_have filter
                 continue
+            fp = fingerprint(j.get("title"), j.get("company"), j.get("location"))
+            # Same opening reposted under a new URL: fold it into the row we
+            # already have (bump the repost count + freshness) instead of adding
+            # a duplicate the user would have to triage again.
+            dupe = conn.execute(
+                "SELECT id FROM jobs WHERE fingerprint=? LIMIT 1", (fp,)).fetchone()
+            if dupe:
+                conn.execute(
+                    "UPDATE jobs SET repost_count=COALESCE(repost_count,0)+1, "
+                    "last_seen=? WHERE id=?", (now, dupe["id"]))
+                continue
             conn.execute(
                 """INSERT INTO jobs
                    (id, source, title, company, location, url, summary,
-                    posted, first_seen, score, status, pay)
-                   VALUES (?,?,?,?,?,?,?,?,?,?, 'new', ?)""",
+                    posted, first_seen, score, status, pay, fingerprint, last_seen)
+                   VALUES (?,?,?,?,?,?,?,?,?,?, 'new', ?,?,?)""",
                 (jid, j["source"], j["title"], j["company"], j["location"],
                  j["url"], j["summary"], j["posted"], now, sc,
-                 j.get("pay") or None))
+                 j.get("pay") or None, fp, now))
             new_here += 1
             fresh_top.append((sc, j["source"], j["title"], jid))
         per_source[name] = new_here
@@ -794,6 +918,15 @@ def fetch_jobs(conn, cfg, on_progress=None):
     except Exception as e:  # noqa: BLE001 -- geocoding must never break a fetch
         if on_progress:
             on_progress("geo", f"lookup pass skipped ({e})")
+
+    # Fold any reposts that slipped in (e.g. two searches returned the same
+    # opening under different URLs within this one fetch), then age out stale
+    # listings so the review pile stays current.
+    try:
+        collapse_duplicates(conn)
+        archive_stale(conn, profile.get("stale_days", 21))
+    except Exception:  # noqa: BLE001 -- cleanup must never break a fetch
+        pass
 
     fresh_top.sort(reverse=True)
     return {"total_new": total_new, "per_source": per_source, "top": fresh_top[:10]}

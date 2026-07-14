@@ -44,6 +44,7 @@
         <label class="field">
           <span>Min fit score: <b id="minScoreVal">1</b></span>
           <input type="range" id="minScore" min="0" max="30" value="1">
+          <small class="field-hint">Higher = pickier. Most jobs land 5–25; 15+ is a strong match.</small>
         </label>
         <div class="field radius-field">
           <label class="radius-toggle">
@@ -61,7 +62,7 @@
         <p class="hint">Tune what counts as a good fit. Changes apply to the next fetch.</p>
 
         <div class="kw-group" data-list="positive">
-          <h3><span class="dot good"></span> Good fit <small>(boost)</small></h3>
+          <h3><span class="dot good"></span> Good fit <small>(raises the score)</small></h3>
           <div class="chips" id="kwPositive"></div>
           <form class="kw-add" data-list="positive">
             <input type="text" placeholder="e.g. dishwasher" required>
@@ -71,7 +72,7 @@
         </div>
 
         <div class="kw-group" data-list="negative">
-          <h3><span class="dot warn"></span> Demote <small>(soft penalty)</small></h3>
+          <h3><span class="dot warn"></span> Lower priority <small>(lowers the score)</small></h3>
           <div class="chips" id="kwNegative"></div>
           <form class="kw-add" data-list="negative">
             <input type="text" placeholder="e.g. overnight" required>
@@ -81,7 +82,7 @@
         </div>
 
         <div class="kw-group" data-list="exclude">
-          <h3><span class="dot bad"></span> Exclude <small>(drop entirely)</small></h3>
+          <h3><span class="dot bad"></span> Exclude <small>(hides it completely)</small></h3>
           <div class="chips" id="kwExclude"></div>
           <form class="kw-add" data-list="exclude">
             <input type="text" placeholder="e.g. commission only" required>
@@ -96,6 +97,7 @@
     <!-- Job list -->
     <section class="joblist" aria-label="Job listings">
       <div class="tabs" id="tabs"></div>
+      <div class="kbd-hint">Keyboard: <b>J</b>/<b>K</b> move · <b>I</b> interested · <b>X</b> not interested · <b>A</b> apply · <b>O</b> open listing</div>
       <div class="jobcards" id="joblist"></div>
     </section>
 

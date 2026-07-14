@@ -16,6 +16,7 @@
 /* the hidden attribute must always win, even on elements whose class sets a
    display (e.g. .btn's inline-flex) -- without this, "hidden" buttons render */
 [hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 html, body { height: 100%; }
 body {
   margin: 0;
@@ -209,6 +210,18 @@ body.col-resizing iframe, body.col-resizing #map { pointer-events: none; }
 .pay-tag { font-size: .72rem; color: #047857; font-weight: 600; display: inline-flex;
   align-items: center; gap: .2rem; max-width: 12rem; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
+.kbd-hint { font-size: .72rem; color: var(--muted); padding: .2rem .1rem .5rem; }
+.kbd-hint b { display: inline-block; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 4px; padding: 0 .3rem; font-weight: 700; color: var(--ink); }
+.field-hint { display: block; font-size: .72rem; color: var(--muted); margin-top: .3rem; }
+.reasons { display: flex; flex-wrap: wrap; gap: .3rem; margin: .1rem 0 .1rem; }
+.why { font-size: .68rem; font-weight: 600; padding: .05rem .35rem; border-radius: 5px;
+  line-height: 1.5; }
+.why.up { color: #047857; background: #ecfdf5; }
+.why.down { color: #b91c1c; background: #fef2f2; }
+.age-tag { font-size: .72rem; color: var(--muted); display: inline-flex; align-items: center; gap: .25rem; }
+.repost-tag { font-size: .72rem; color: #b45309; background: #fff7ed; border: 1px solid #fed7aa;
+  border-radius: 6px; padding: 0 .35rem; display: inline-flex; align-items: center; gap: .25rem; }
 .relay-steps { margin: .5rem 0 .3rem; padding-left: 1.3rem; font-size: .84rem;
   display: flex; flex-direction: column; gap: .25rem; }
 .applied-line { font-size: .78rem; color: #047857; margin-top: .45rem; }

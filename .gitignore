@@ -26,6 +26,8 @@ jobhunt.zip
 jobhunt-ui.png
 
 # ---- local tooling / editor / OS ----
+# deferred security notes -- repo is public, keep these out of it
+SECURITY_TODO.md
 .claude/
 .playwright-mcp/
 .DS_Store
