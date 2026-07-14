@@ -75,17 +75,27 @@ body {
   flex: 1; min-height: 0;
   display: grid;
   /* sidebar | job list | drag handle | map (map width is user-resizable) */
-  grid-template-columns: 320px minmax(240px, 1fr) 8px var(--map-w, 44%);
+  grid-template-columns: 320px minmax(240px, 1fr) 12px var(--map-w, 44%);
 }
 
-/* draggable splitter between the list and the map */
-.gutter { background: var(--line); cursor: col-resize; position: relative; z-index: 40; }
+/* Draggable splitter between the list and the map. Always shows a grip so it
+   reads as a handle you can grab, not just a seam. */
+.gutter { background: #e2e6ec; cursor: col-resize; position: relative; z-index: 40;
+  border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .gutter::after {
   content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 4px; height: 36px; border-radius: 3px; background: #c4ccd8;
+  width: 6px; height: 46px; border-radius: 4px; background: #fff;
+  border: 1px solid #b7bfca;
+  /* two columns of grip dots */
+  background-image: radial-gradient(circle, #8a94a6 1px, transparent 1.2px);
+  background-size: 3px 6px; background-position: center;
 }
-.gutter:hover, .gutter.dragging { background: var(--accent); }
-.gutter:hover::after, .gutter.dragging::after { background: #fff; }
+.gutter:hover { background: #d3dae6; }
+.gutter:hover::after, .gutter.dragging::after {
+  border-color: var(--accent);
+  background-image: radial-gradient(circle, var(--accent) 1.1px, transparent 1.3px);
+}
+.gutter.dragging { background: var(--accent); }
 body.col-resizing { cursor: col-resize; user-select: none; }
 body.col-resizing iframe, body.col-resizing #map { pointer-events: none; }
 .sidebar { overflow-y: auto; border-right: 1px solid var(--line); padding: 1rem; }

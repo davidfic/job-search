@@ -196,7 +196,7 @@ function wireGutter() {
     if (!dragging) return;
     const rect = layout.getBoundingClientRect();
     let w = rect.right - e.clientX;                  // map width = distance to right edge
-    const max = rect.width - 320 - 240 - 8;          // keep room for sidebar + list + handle
+    const max = rect.width - 320 - 240 - 12;         // keep room for sidebar + list + handle
     w = Math.max(300, Math.min(max, w));
     layout.style.setProperty("--map-w", w + "px");
     if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (state.map) state.map.invalidateSize(); });
