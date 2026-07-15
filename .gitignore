@@ -7,6 +7,8 @@ jobhunt.db
 jobhunt_config.json
 # your uploaded resume(s):
 resumes/
+# containerized data (bind-mounted volume holding all of the above):
+data/
 # generated report:
 jobhunt_report.html
 

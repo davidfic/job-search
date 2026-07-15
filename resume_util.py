@@ -24,7 +24,7 @@ import zipfile
 
 import jobhunt  # for HERE, has_term, dt
 
-RESUMES_DIR = os.path.join(jobhunt.HERE, "resumes")
+RESUMES_DIR = os.path.join(jobhunt.DATA_DIR, "resumes")
 META_PATH = os.path.join(RESUMES_DIR, "_meta.json")
 MAX_BYTES = 8 * 1024 * 1024
 ALLOWED_EXT = {".pdf", ".docx", ".txt", ".md", ".text", ".rtf"}

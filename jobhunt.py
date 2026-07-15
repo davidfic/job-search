@@ -51,10 +51,16 @@ except ImportError:
 _MISSING_DEPS = "needs network deps -- run: pip install feedparser requests"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(HERE, "jobhunt_config.json")
-SECRETS_PATH = os.path.join(HERE, "jobhunt_secrets.json")
-DB_PATH = os.path.join(HERE, "jobhunt.db")
-REPORT_PATH = os.path.join(HERE, "jobhunt_report.html")
+# Personal data (config, secrets, db, resumes, the exclude list) normally lives
+# right beside the code. Set JOBHUNT_DATA_DIR to relocate it -- the containerized
+# build points it at a bind-mounted volume so data survives image rebuilds.
+DATA_DIR = os.environ.get("JOBHUNT_DATA_DIR", "").strip() or HERE
+if DATA_DIR != HERE:
+    os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_PATH = os.path.join(DATA_DIR, "jobhunt_config.json")
+SECRETS_PATH = os.path.join(DATA_DIR, "jobhunt_secrets.json")
+DB_PATH = os.path.join(DATA_DIR, "jobhunt.db")
+REPORT_PATH = os.path.join(DATA_DIR, "jobhunt_report.html")
 UA = "jobhunt-personal/1.0 (personal job search; respectful polling)"
 STATUSES = ["new", "interested", "applied", "rejected", "archived"]
 
@@ -216,11 +222,26 @@ def read_terms_file(path):
 
 
 def exclude_file_path(cfg):
-    """Absolute path to the configured exclude-keywords text file."""
+    """Absolute path to the configured exclude-keywords text file. A relative
+    path resolves against DATA_DIR so the user's edits persist with the rest of
+    their data (e.g. on the container's mounted volume)."""
     ef = cfg.get("profile", {}).get("exclude_file")
     if ef and not os.path.isabs(ef):
-        ef = os.path.join(HERE, ef)
+        ef = os.path.join(DATA_DIR, ef)
     return ef
+
+
+def seed_data_dir():
+    """When data lives outside the code dir (JOBHUNT_DATA_DIR), copy the shipped
+    default exclude list into it once so the user starts from the same defaults
+    and their later edits persist on the volume. No-op for a normal install."""
+    if DATA_DIR == HERE:
+        return
+    import shutil
+    src = os.path.join(HERE, "exclude_keywords.txt")
+    dst = os.path.join(DATA_DIR, "exclude_keywords.txt")
+    if os.path.exists(src) and not os.path.exists(dst):
+        shutil.copy2(src, dst)
 
 
 def load_config(merge_excludes=True):
@@ -785,6 +806,7 @@ SOURCES = {
 # Commands
 # --------------------------------------------------------------------------- #
 def cmd_init(_):
+    seed_data_dir()
     if os.path.exists(CONFIG_PATH):
         print(f"Config already exists at {CONFIG_PATH} (leaving it alone).")
         return
@@ -1101,6 +1123,7 @@ def cmd_seed_demo(_):
 
 
 def cmd_serve(args):
+    seed_data_dir()
     if not os.path.exists(CONFIG_PATH):
         cmd_init(None)
     import jobhunt_web

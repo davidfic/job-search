@@ -1,0 +1,23 @@
+# jobhunt -- local container for Linux.  Run with the helper scripts
+# (start-jobhunt-docker.sh) or directly:  docker compose up -d --build
+services:
+  jobhunt:
+    build:
+      context: .
+      args:
+        # the start script passes the current git sha so the app shows a version
+        JOBHUNT_VERSION: "${JOBHUNT_VERSION:-}"
+    image: jobhunt:local
+    container_name: jobhunt
+    # Published on all interfaces so a phone/laptop on your Wi-Fi can reach it.
+    # There is no password -- only expose this on a network you trust. For
+    # this-machine-only, change to "127.0.0.1:8765:8765".
+    ports:
+      - "8765:8765"
+    # Data lives in ./data next to this file -- easy to back up or inspect.
+    volumes:
+      - ./data:/data
+    # Run as the invoking user (set by the start script) so files in ./data
+    # aren't root-owned. Defaults to root if launched with plain docker compose.
+    user: "${JOBHUNT_UID:-0}:${JOBHUNT_GID:-0}"
+    restart: unless-stopped

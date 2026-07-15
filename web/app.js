@@ -851,6 +851,11 @@ async function showUpdateResult() {
 function renderVersionLine(info) {
   const el = $("#versionLine");
   el.hidden = false;
+  if (info.container) {
+    el.innerHTML = `Version ${escapeHtml(fmtVersion(info.current))} · container ` +
+      `<span title="Update by pulling a new image (see the update script)">· update by rebuilding the image</span>`;
+    return;
+  }
   const cur = escapeHtml(fmtVersion(info.current)) + (info.git ? " · git" : "");
   if (info.available) {
     el.innerHTML = `Version ${cur} · <button class="linklike vl-new" type="button">` +

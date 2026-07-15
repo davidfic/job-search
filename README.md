@@ -51,6 +51,9 @@ opens the app automatically. If it doesn't, go to **<http://127.0.0.1:8765>**.
 >
 > **Mac:** if you get *“cannot be opened because it is from an unidentified
 > developer,”* right-click the start file → **Open** → **Open**. One time only.
+>
+> **Linux + Docker:** prefer a container? Run `./start-jobhunt-docker.sh` — see
+> [EXTRAS.md](EXTRAS.md#run-it-in-docker-linux).
 
 ---
 

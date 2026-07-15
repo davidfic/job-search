@@ -62,6 +62,12 @@ def is_git_checkout():
     return os.path.isdir(os.path.join(HERE, ".git"))
 
 
+def in_container():
+    """The container build sets this. Self-update is meaningless there -- the
+    code is baked into the image, so updates happen by pulling a new image."""
+    return os.environ.get("JOBHUNT_CONTAINER") == "1"
+
+
 def current_version():
     """The installed version: HEAD in a git checkout, else the version.json
     stamp written by the zip updater, else None (fresh zip install)."""
@@ -145,6 +151,9 @@ def _git_version():
 
 def check(force=False):
     """Compare the installed version against the latest commit on main."""
+    if in_container():
+        # No self-update in a container; update by pulling a new image.
+        return {"container": True, "available": False, "current": current_version()}
     now = time.time()
     with _LOCK:
         if not force and _cache["result"] and now - _cache["at"] < CHECK_INTERVAL:
@@ -246,6 +255,9 @@ def apply_update():
     the backup is restored immediately so the install is never left mixed.
     The caller decides whether to restart (supervised) or ask the user to.
     """
+    if in_container():
+        raise ValueError("Running in a container -- update by pulling a new "
+                         "image (see the update script), not from the app.")
     info = check(force=True)
     if not info["available"]:
         raise ValueError("Already up to date.")

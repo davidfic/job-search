@@ -64,6 +64,39 @@ many were hidden and why.
 
 ---
 
+## Run it in Docker (Linux)
+
+Prefer a container? There's a Dockerfile and Compose setup. You need Docker with
+the Compose plugin, and you should run it on a **home machine** — Craigslist
+blocks datacenter/VPN IPs, so a cloud host won't fetch listings.
+
+```bash
+./start-jobhunt-docker.sh     # build + run; prints the URL
+./logs-jobhunt-docker.sh      # watch what it's doing
+./stop-jobhunt-docker.sh      # stop (data kept)
+./update-jobhunt-docker.sh    # git pull + rebuild to the latest version
+```
+
+Or drive Compose yourself: `docker compose up -d --build`.
+
+- **Your data lives in `./data`** (db, config, email login, resumes, exclude
+  list) — bind-mounted into the container, so rebuilds never touch it. Back it
+  up by copying that folder. The start script runs the container as your user,
+  so the files aren't root-owned.
+- **The app is published on `0.0.0.0:8765`** — reachable from your phone at
+  `http://<your-ip>:8765`. There's no password, so only do this on Wi-Fi you
+  trust; for this-machine-only, change the port line in `docker-compose.yml` to
+  `"127.0.0.1:8765:8765"`. You may also need to allow port 8765 through the host
+  firewall for other devices to connect.
+- **Updates:** the in-app self-updater is disabled in the container (the sidebar
+  shows "container · update by rebuilding the image"). Update with
+  `./update-jobhunt-docker.sh`, which pulls the latest code and rebuilds.
+- **Data location** is controlled by the `JOBHUNT_DATA_DIR` env var (set to
+  `/data` in the image); a normal non-Docker install ignores it and keeps data
+  beside the code as before.
+
+---
+
 ## Change the area
 
 Everything about location lives in `jobhunt_config.json` under `location_filter`

@@ -1,0 +1,37 @@
+# Keep the image to code only -- never bake in personal data or build cruft.
+
+# personal data (lives in the mounted ./data volume, not the image)
+data/
+jobhunt.db
+jobhunt_config.json
+jobhunt_secrets.json
+resumes/
+exclude_keywords.txt.local
+
+# updater / runtime state (meaningless in a container)
+version.json
+.backup/
+.update_pending.json
+.update_result.json
+.deps_ok
+
+# build / tooling
+.git
+.gitignore
+.venv/
+__pycache__/
+*.pyc
+.claude/
+.playwright-mcp/
+
+# artifacts / docs / demo not needed at runtime
+docs/
+jobhunt-demo/
+*.zip
+*.png
+SECURITY_TODO.md
+
+# the container's own files
+.dockerignore
+Dockerfile
+docker-compose.yml
