@@ -9,6 +9,8 @@ jobhunt_config.json
 resumes/
 # containerized data (bind-mounted volume holding all of the above):
 data/
+# Cloudflare tunnel token — never commit:
+.env
 # generated report:
 jobhunt_report.html
 

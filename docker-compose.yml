@@ -21,3 +21,24 @@ services:
     # aren't root-owned. Defaults to root if launched with plain docker compose.
     user: "${JOBHUNT_UID:-0}:${JOBHUNT_GID:-0}"
     restart: unless-stopped
+
+  # Optional Cloudflare tunnel for access from outside your network. Opt-in:
+  # only runs with `--profile tunnel` (the start-jobhunt-tunnel.sh script). It
+  # reaches jobhunt over the internal network at http://jobhunt:8765 -- no host
+  # port is opened for it. In the Cloudflare Zero Trust dashboard, point your
+  # tunnel's public hostname at the service URL http://jobhunt:8765.
+  #
+  # WARNING: jobhunt has no login yet, so anyone with the URL can use it. Put a
+  # Cloudflare Access policy in front of the hostname (email/Google login, zero
+  # app changes) until the in-app username/password lands.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: jobhunt-tunnel
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      # from .env (Zero Trust > Networks > Tunnels > your tunnel > token)
+      TUNNEL_TOKEN: "${TUNNEL_TOKEN:-}"
+    depends_on:
+      - jobhunt
+    restart: unless-stopped

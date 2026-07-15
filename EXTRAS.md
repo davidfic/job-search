@@ -95,6 +95,43 @@ Or drive Compose yourself: `docker compose up -d --build`.
   `/data` in the image); a normal non-Docker install ignores it and keeps data
   beside the code as before.
 
+### Access it from outside your network (Cloudflare Tunnel)
+
+The compose stack includes an optional `cloudflared` sidecar that exposes
+jobhunt through a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+— no router ports opened, nothing exposed but the tunnel itself. It reaches
+jobhunt over the internal Docker network, so it works alongside (or instead of)
+the LAN port.
+
+> ⚠️ **jobhunt has no login yet.** On the public internet, anyone with the URL
+> can read your resume/settings and send email as you. **Put a Cloudflare Access
+> policy in front of the hostname** (Zero Trust → Access → Applications → add
+> your hostname → allow just your email / Google login). That gives you a real
+> login screen with zero app changes until the in-app username/password lands.
+
+**One-time setup** (needs a Cloudflare account with a domain on it):
+
+1. In the **Zero Trust dashboard** → **Networks → Tunnels → Create a tunnel** →
+   choose **Cloudflared**. Name it (e.g. `jobhunt`) and **copy the token** it
+   shows.
+2. In that tunnel’s **Public Hostnames**, add one (e.g. `jobhunt.yourdomain.com`)
+   and set the **Service** to **HTTP** → **`jobhunt:8765`**. (That’s the
+   container name on the compose network — not localhost.)
+3. Back in the jobhunt folder: `cp .env.example .env`, and paste the token as
+   `TUNNEL_TOKEN=...`. (`.env` is git-ignored — never commit it.)
+4. Start it with the tunnel:
+
+   ```bash
+   ./start-jobhunt-tunnel.sh
+   ```
+
+   This runs the normal stack **plus** the tunnel (`docker compose --profile
+   tunnel up -d --build`). `./stop-jobhunt-docker.sh` stops both; tunnel logs
+   are `docker logs -f jobhunt-tunnel`.
+
+Your app is then reachable at the hostname you configured. The regular
+`./start-jobhunt-docker.sh` never starts the tunnel — it’s opt-in.
+
 ---
 
 ## Change the area

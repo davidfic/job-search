@@ -23,6 +23,8 @@
     "stop-jobhunt-docker.sh",
     "update-jobhunt-docker.sh",
     "logs-jobhunt-docker.sh",
+    "start-jobhunt-tunnel.sh",
+    ".env.example",
     "README.md",
     "EXTRAS.md",
     "READ ME FIRST.txt",
