@@ -29,6 +29,7 @@ import json
 import mimetypes
 import os
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -39,6 +40,8 @@ import resume_util
 import contact_util
 import apply_util
 import update_util
+import auth_util
+from http.cookies import SimpleCookie
 
 WEB_DIR = os.path.join(jobhunt.HERE, "web")
 
@@ -119,6 +122,9 @@ def build_state():
         "transit": geo_data.TRANSIT,
         "adzuna_ready": bool(az.get("enabled") and az.get("app_id") and az.get("app_key")),
         "app_version": update_util.current_version(),
+        "auth_enabled": auth_util.is_enabled(),
+        "auth_configured": auth_util.is_configured(),
+        "auth_username": auth_util.get_username(),
     }
 
 
@@ -503,6 +509,73 @@ def update_status():
     return {"result": result, "current": update_util.current_version()}
 
 
+def do_auth(b):
+    """Configure the login from Settings: set/replace credentials and/or flip
+    the enabled switch. Callable while auth is off (initial setup, local only);
+    once on, the auth gate already requires a session to reach here."""
+    b = b or {}
+    if b.get("username") or b.get("password"):
+        auth_util.set_login(b.get("username") or auth_util.get_username(),
+                            b.get("password") or "")
+    if "enabled" in b:
+        auth_util.set_enabled(bool(b["enabled"]))
+    return {"auth_enabled": auth_util.is_enabled(),
+            "auth_configured": auth_util.is_configured(),
+            "auth_username": auth_util.get_username()}
+
+
+# A self-contained login page (no external assets) shown when login is enabled
+# and the caller has no valid session.
+LOGIN_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jobhunt — sign in</title>
+<style>
+  :root { --accent:#2563eb; --line:#e6e8ec; --ink:#15181d; --muted:#6a7280; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+    background:#f6f7f9; font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--ink); }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px;
+    box-shadow:0 1px 3px rgba(16,24,40,.1); padding:1.6rem 1.5rem; width:min(92vw,340px); }
+  .brand { display:flex; align-items:center; gap:.5rem; margin-bottom:1rem; }
+  .brand .logo { font-size:1.4rem; color:var(--accent); }
+  h1 { font-size:1.15rem; margin:0; }
+  label { display:block; font-size:.8rem; color:var(--muted); margin:.7rem 0 .25rem; }
+  input { width:100%; padding:.55rem .65rem; border:1px solid var(--line);
+    border-radius:9px; font:inherit; }
+  button { width:100%; margin-top:1.1rem; padding:.6rem; border:none; border-radius:9px;
+    background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover { background:#1d4ed8; }
+  .err { color:#dc2626; font-size:.82rem; margin-top:.7rem; min-height:1em; }
+</style></head>
+<body>
+  <form class="card" id="f">
+    <div class="brand"><span class="logo">◎</span><h1>jobhunt</h1></div>
+    <label for="u">Username</label>
+    <input id="u" autocomplete="username" autofocus required>
+    <label for="p">Password</label>
+    <input id="p" type="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+    <div class="err" id="e"></div>
+  </form>
+  <script>
+    document.getElementById("f").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const e = document.getElementById("e"); e.textContent = "";
+      try {
+        const r = await fetch("/api/login", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({username:document.getElementById("u").value,
+                                password:document.getElementById("p").value})});
+        if (r.ok) { location.href = "/"; }
+        else { const j = await r.json().catch(()=>({})); e.textContent = j.error || "Sign in failed."; }
+      } catch (_) { e.textContent = "Sign in failed — is the app still running?"; }
+    });
+  </script>
+</body></html>
+"""
+
+
 # --------------------------------------------------------------------------- #
 # HTTP handler
 # --------------------------------------------------------------------------- #
@@ -526,11 +599,84 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(n) or b"{}")
 
+    # ---- auth ----
+    def _session_token(self):
+        raw = self.headers.get("Cookie")
+        if not raw:
+            return None
+        try:
+            return SimpleCookie(raw).get(auth_util.COOKIE) and \
+                   SimpleCookie(raw)[auth_util.COOKIE].value
+        except Exception:                        # noqa: BLE001 -- malformed cookie
+            return None
+
+    def _set_session_cookie(self, token, clear=False):
+        age = 0 if clear else auth_util.SESSION_DAYS * 86400
+        val = "" if clear else token
+        self.send_header("Set-Cookie",
+                         f"{auth_util.COOKIE}={val}; HttpOnly; SameSite=Lax; "
+                         f"Path=/; Max-Age={age}")
+
+    def _authed(self):
+        return auth_util.check_session(self._session_token())
+
+    def _gate(self, path):
+        """When login is enabled, block anything but the login page/endpoint for
+        unauthenticated callers. Returns True if the request may proceed."""
+        if not auth_util.is_enabled():
+            return True
+        if path in ("/login", "/api/login") or self._authed():
+            return True
+        if path.startswith("/api/"):
+            self._json({"error": "login required"}, 401)
+        else:
+            self.send_response(302)
+            self.send_header("Location", "/login")
+            self.end_headers()
+        return False
+
+    def _serve_login_page(self):
+        html = LOGIN_PAGE.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html)))
+        self.end_headers()
+        self.wfile.write(html)
+
+    def _do_login(self):
+        b = self._body()
+        if auth_util.verify(b.get("username"), b.get("password")):
+            token = auth_util.create_session()
+            body = json.dumps({"ok": True}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self._set_session_cookie(token)
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            time.sleep(0.7)                      # slow brute-force attempts
+            self._json({"error": "Wrong username or password."}, 401)
+
+    def _do_logout(self):
+        auth_util.destroy_session(self._session_token())
+        body = json.dumps({"ok": True}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._set_session_cookie("", clear=True)
+        self.end_headers()
+        self.wfile.write(body)
+
     # ---- GET ----
     def do_GET(self):
         u = urlparse(self.path)
         path = u.path
+        if not self._gate(path):
+            return
         try:
+            if path == "/login":
+                return self._serve_login_page()
             if path == "/api/state":
                 return self._json(build_state())
             if path == "/api/jobs":
@@ -568,7 +714,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         path = u.path
+        if not self._gate(path):
+            return
         try:
+            if path == "/api/login":
+                return self._do_login()
+            if path == "/api/logout":
+                return self._do_logout()
+            if path == "/api/auth":
+                with _LOCK:
+                    return self._json(do_auth(self._body()))
             if path == "/api/resume":           # raw file bytes, not JSON
                 name = (parse_qs(u.query).get("name") or ["resume"])[0]
                 n = int(self.headers.get("Content-Length") or 0)

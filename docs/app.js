@@ -9,10 +9,16 @@ const DEMO_DATA = (typeof window !== "undefined" && window.JOBHUNT_DEMO_DATA) ||
 // --------------------------------------------------------------------------- //
 // tiny API layer
 // --------------------------------------------------------------------------- //
+// If login is on and our session lapses, the server answers 401 -- bounce to
+// the login page rather than surfacing a confusing error.
+function onUnauthorized() {
+  if (!DEMO) location.href = "/login";
+}
 const api = {
   async get(path) {
     if (DEMO) return demoGet(path);
     const r = await fetch(path);
+    if (r.status === 401) { onUnauthorized(); throw new Error("login required"); }
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.statusText);
     return j;
@@ -24,6 +30,7 @@ const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {}),
     });
+    if (r.status === 401) { onUnauthorized(); throw new Error("login required"); }
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.statusText);
     return j;
@@ -753,6 +760,7 @@ async function openSettings() {
   let p;
   try { p = await api.get("/api/profile"); } catch (e) { return toast("Error: " + e.message); }
   const a = p.applicant, s = p.smtp;
+  const au = state.auth || { enabled: false, configured: false, username: "" };
   const body = `
     <div class="row2">
       <div class="field"><label>Your name</label><input type="text" id="pName" value="${escapeAttr(a.name)}"></div>
@@ -776,8 +784,22 @@ async function openSettings() {
     <div class="modal-actions">
       <button class="btn primary" id="saveBtn">Save</button>
       <button class="btn" id="testBtn">Send test connection</button>
-    </div>`;
-  openModal(modalShell("Settings", "Your info, cover note, and email setup", body));
+    </div>
+    ${DEMO ? "" : `
+    <hr style="border:none;border-top:1px solid var(--line);margin:1rem 0">
+    <h3 style="margin:.2rem 0 .5rem;font-size:.95rem">Login (optional)</h3>
+    <p class="muted-note" style="margin-top:0">Require a username and password to
+      open jobhunt — useful before exposing it beyond this computer. Off by
+      default. ${au.configured ? "A login is set." : "No login set yet."}</p>
+    <div class="row2">
+      <div class="field"><label>Username</label><input type="text" id="aUser" value="${escapeAttr(au.username || "")}" autocomplete="off"></div>
+      <div class="field"><label>Password ${au.configured ? "<span class='hint'>— blank keeps current</span>" : ""}</label>
+        <input type="password" id="aPass" autocomplete="new-password" placeholder="${au.configured ? "•••••••• (unchanged)" : "at least 6 characters"}"></div>
+    </div>
+    <label class="radius-toggle" style="margin:.2rem 0 .6rem"><input type="checkbox" id="aEnabled" ${au.enabled ? "checked" : ""}> <span>Require login to open jobhunt</span></label>
+    <div class="modal-actions"><button class="btn primary" id="authSaveBtn">Save login settings</button></div>
+    <div class="muted-note" id="authNote">${au.enabled ? "Login is ON." : "Login is off."}</div>`}`;
+  openModal(modalShell("Settings", "Your info, cover note, email, and login", body));
   $("#mClose").addEventListener("click", closeModal);
 
   const smtpPayload = () => ({
@@ -802,6 +824,30 @@ async function openSettings() {
       st.className = "smtp-status " + (r.ok ? "ok" : "bad");
       st.textContent = (r.ok ? "✓ " : "✕ ") + r.message;
     } catch (e) { st.className = "smtp-status bad"; st.textContent = "✕ " + e.message; }
+  });
+
+  const authSaveBtn = $("#authSaveBtn");
+  if (authSaveBtn) authSaveBtn.addEventListener("click", async () => {
+    const username = $("#aUser").value.trim();
+    const password = $("#aPass").value;
+    const enabled = $("#aEnabled").checked;
+    // Turning login on for the first time needs a username + password together.
+    if (enabled && !au.configured && (!username || !password)) {
+      return toast("Set a username and password before requiring login.");
+    }
+    const payload = { enabled };
+    if (username) payload.username = username;
+    if (password) payload.password = password;
+    try {
+      const r = await api.post("/api/auth", payload);
+      state.auth = { enabled: !!r.auth_enabled, configured: !!r.auth_configured,
+                     username: r.auth_username || "" };
+      $("#logoutBtn").hidden = !state.auth.enabled;
+      $("#authNote").textContent = state.auth.enabled
+        ? "Login is ON. You (and anyone else) will sign in next time."
+        : "Login is off.";
+      toast("Login settings saved");
+    } catch (e) { toast("Error: " + e.message); }
   });
 }
 
@@ -1050,6 +1096,8 @@ async function init() {
   state.transit = s.transit;
   state.home = s.home;
   state.statuses = s.statuses;
+  state.auth = { enabled: !!s.auth_enabled, configured: !!s.auth_configured,
+                 username: s.auth_username || "" };
 
   // min-score default from config
   const ms = $("#minScore");
@@ -1096,6 +1144,16 @@ async function init() {
   $("#fetchBtn").addEventListener("click", doFetch);
   $("#settingsBtn").addEventListener("click", openSettings);
   $("#outboxBtn").addEventListener("click", openOutbox);
+
+  // Show Sign out only when login is actually enforced.
+  const logoutBtn = $("#logoutBtn");
+  if (state.auth.enabled) {
+    logoutBtn.hidden = false;
+    logoutBtn.addEventListener("click", async () => {
+      try { await api.post("/api/logout", {}); } catch (_) { /* ignore */ }
+      location.href = "/login";
+    });
+  }
 
   if (DEMO) {
     $("#homeLabel").textContent = "live demo · sample Davis-area data";

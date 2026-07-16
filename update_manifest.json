@@ -8,6 +8,7 @@
     "resume_util.py",
     "geo_data.py",
     "geo_lookup.py",
+    "auth_util.py",
     "update_util.py",
     "_boot.py",
     "requirements.txt",

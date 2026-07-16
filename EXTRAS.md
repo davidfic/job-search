@@ -64,6 +64,36 @@ many were hidden and why.
 
 ---
 
+## Require a login (optional)
+
+jobhunt can ask for a username and password before it opens — worth turning on
+before you expose it beyond your own computer (e.g. through the Cloudflare
+tunnel). **It's off by default**, so nothing changes until you enable it.
+
+Set it up either way:
+
+- **In the app:** ⚙ Settings → **Login** → enter a username + password, tick
+  *Require login to open jobhunt*, Save.
+- **From the command line:**
+  ```bash
+  python jobhunt.py set-login --username you   # prompts for a password (not enabled yet)
+  python jobhunt.py auth on                     # start requiring it
+  python jobhunt.py auth off                    # stop requiring it (re-opens)
+  ```
+
+The password is stored only as a salted PBKDF2-SHA256 hash in
+`jobhunt_secrets.json` (never in plaintext, never sent to the browser). Login
+grants an HttpOnly session cookie; sessions reset when the app restarts, so
+you'll sign in again after a restart. Forgot the password or locked yourself
+out? Run `python jobhunt.py auth off` (or `set-login` to set a new one) — you
+have full control from the machine it runs on.
+
+> This is a single shared login, not multi-user accounts. It pairs well with a
+> Cloudflare Access policy in front of the tunnel (defense in depth), but either
+> one alone already gates access.
+
+---
+
 ## Run it in Docker (Linux)
 
 Prefer a container? There's a Dockerfile and Compose setup. You need Docker with

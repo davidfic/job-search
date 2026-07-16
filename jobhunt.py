@@ -1130,6 +1130,39 @@ def cmd_serve(args):
     jobhunt_web.serve(host=args.host, port=args.port, open_browser=not args.no_open)
 
 
+def cmd_set_login(args):
+    """Set (or replace) the web login. Does not enable it unless --enable is
+    given -- so you can set it up without locking anyone out yet."""
+    import getpass
+    import auth_util
+    username = args.username or input("Username: ").strip()
+    pw = getpass.getpass("Password: ")
+    if pw != getpass.getpass("Confirm password: "):
+        sys.exit("Passwords don't match.")
+    try:
+        auth_util.set_login(username, pw)
+        if args.enable:
+            auth_util.set_enabled(True)
+    except ValueError as e:
+        sys.exit(str(e))
+    if args.enable:
+        print(f"Login set for '{username}' and ENABLED -- the web app now requires sign-in.")
+    else:
+        print(f"Login set for '{username}', but not enabled yet. Turn it on with:"
+              f"\n    python {os.path.basename(__file__)} auth on\n"
+              "or from the app's Settings.")
+
+
+def cmd_auth(args):
+    import auth_util
+    try:
+        auth_util.set_enabled(args.state == "on")
+    except ValueError as e:
+        sys.exit(str(e))
+    print("Web login is now REQUIRED." if args.state == "on"
+          else "Web login disabled -- the app is open again.")
+
+
 def main():
     p = argparse.ArgumentParser(description="Personal job-search aggregator")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1157,6 +1190,16 @@ def main():
     pm.add_argument("status")
     pm.add_argument("--note")
     pm.set_defaults(func=cmd_mark)
+
+    psl = sub.add_parser("set-login", help="set the web app's username/password")
+    psl.add_argument("--username")
+    psl.add_argument("--enable", action="store_true",
+                     help="also require login now (default: set it but leave off)")
+    psl.set_defaults(func=cmd_set_login)
+
+    pau = sub.add_parser("auth", help="turn the web login on or off")
+    pau.add_argument("state", choices=["on", "off"])
+    pau.set_defaults(func=cmd_auth)
 
     args = p.parse_args()
     args.func(args)
